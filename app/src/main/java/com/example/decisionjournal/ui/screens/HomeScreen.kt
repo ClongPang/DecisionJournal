@@ -1,6 +1,8 @@
 package com.example.decisionjournal.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -25,85 +30,134 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.HomeViewModel
-import com.example.decisionjournal.ui.components.JournalTopBar
+import com.example.decisionjournal.ui.components.NarrativeCard
 import com.example.decisionjournal.ui.components.PrimaryActionButton
-import com.example.decisionjournal.ui.components.SoftSurfaceCard
 import com.example.decisionjournal.ui.components.StatusPill
+import com.example.decisionjournal.ui.components.ArchiveKicker
 import com.example.decisionjournal.ui.theme.JournalDimens
-import com.example.decisionjournal.ui.theme.MistBlue
+import com.example.decisionjournal.ui.theme.MistGreen
+import com.example.decisionjournal.ui.theme.Hairline
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-private val homeDate = DateTimeFormatter.ofPattern("M月d日")
+private val homeDate = DateTimeFormatter.ofPattern("M月d日 · EEEE", Locale.CHINA)
 
 @Composable
-fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    onCreate: () -> Unit,
+    onOpen: (Long) -> Unit,
+    onViewDue: () -> Unit,
+    vm: HomeViewModel = hiltViewModel(),
+) {
     val due by vm.due.collectAsStateWithLifecycle()
     val all by vm.all.collectAsStateWithLifecycle()
-    val recent = all.firstOrNull()
+    val featured = due.firstOrNull() ?: all.firstOrNull()
+    val featuredStatus = when {
+        due.isNotEmpty() -> "待回看"
+        featured?.status == DecisionStatus.REVIEWED -> "已回看"
+        featured?.reviewDate != null -> "等待回看"
+        else -> "此刻的判断"
+    }
     Column(
-        Modifier.fillMaxSize().padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+        verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
-        JournalTopBar(
-            title = "回看",
-            subtitle = Instant.now().atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate),
-        )
-        Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 18.dp))
-        when {
-            due.isNotEmpty() -> {
-                Text("最近的决定", style = MaterialTheme.typography.titleMedium)
-                DecisionCard(due.first(), "待复盘", onOpen)
-            }
-            recent != null -> {
-                Text("最近的决定", style = MaterialTheme.typography.titleMedium)
-                DecisionCard(recent, if (recent.status == DecisionStatus.REVIEWED) "已回看" else "等待回看", onOpen)
-            }
-            else -> Text("今天没有待复盘的决定。\n先把此刻的想法留下来。", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ArchiveKicker("今日回看")
+            Text(Instant.now().atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 12.dp))
+        Text("把当时的判断留住，等生活给出答案。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        featured?.let { decision ->
+            ArchiveCoverCard(decision, featuredStatus, onOpen)
+            if (due.size > 1) {
+                TextButton(onClick = onViewDue, modifier = Modifier.align(Alignment.End)) {
+                    Text("查看全部 ${due.size} 条待回看")
+                }
+            }
+        } ?: EmptyArchiveState()
+
         Spacer(Modifier.weight(1f))
         PrimaryActionButton("记录一个决定", onCreate)
     }
 }
 
 @Composable
-private fun DecisionCard(decision: Decision, status: String, onOpen: (Long) -> Unit) {
-    SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true, onClick = { onOpen(decision.id) }) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Icon(Icons.Rounded.CalendarToday, null, Modifier.size(17.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    when (status) {
-                        "待复盘" -> "该回来看看这段记录了"
-                        "已回看" -> "这是一段已经回看的记录"
-                        else -> "一段正在等待答案的记录"
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                )
+private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) -> Unit) {
+    NarrativeCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onOpen(decision.id) },
+        accessibilityLabel = "$status，${decision.question}。打开决定详情",
+    ) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (status == "待回看") Icons.Rounded.Schedule else Icons.Rounded.AutoStories, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(if (status == "待回看") "该回来看看了" else "最近的一段记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                StatusPill(status, if (status == "已回看") MistGreen else MaterialTheme.colorScheme.surface)
             }
             Text(decision.question, style = MaterialTheme.typography.headlineSmall)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Rounded.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        "决定于 " + Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        when (status) {
-                            "待复盘" -> "现在就可以回来记录结果"
-                            "等待回看" -> "还有时间，记得回来看看"
-                            else -> "这段记录已经被回看"
-                        },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+            decision.context?.takeIf { it.isNotBlank() }?.let { Text(it, maxLines = 2, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Spacer(Modifier.height(22.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Rounded.CalendarToday, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    if (status == "待回看") "现在就可以记录结果" else "决定于 ${Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            StatusPill(status, if (status == "待复盘") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer)
         }
     }
+}
+
+@Composable
+private fun EmptyArchiveState() {
+    Column(Modifier.fillMaxWidth().padding(top = 42.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        ArchiveKicker("一段记录，会慢慢显影")
+        Text("今天还没有待回看的决定。", style = MaterialTheme.typography.titleMedium)
+        Text("从一个小小的选择开始，为未来留下线索。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            ArchiveCyclePoint("01", "记录", "写下此刻", emphasized = true, Modifier.weight(1f))
+            ArchiveCycleRule()
+            ArchiveCyclePoint("02", "等待", "让生活发生", emphasized = false, Modifier.weight(1f))
+            ArchiveCycleRule()
+            ArchiveCyclePoint("03", "回看", "收下答案", emphasized = false, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ArchiveCyclePoint(index: String, title: String, note: String, emphasized: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .background(if (emphasized) MaterialTheme.colorScheme.primary else Hairline, MaterialTheme.shapes.small),
+            )
+            Text(index, style = MaterialTheme.typography.labelMedium, color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(title, style = MaterialTheme.typography.labelMedium)
+        Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ArchiveCycleRule() {
+    Box(
+        Modifier
+            .padding(top = 4.dp)
+            .width(14.dp)
+            .height(1.dp)
+            .background(Hairline),
+    )
 }

@@ -1,10 +1,14 @@
 package com.example.decisionjournal.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Home
@@ -17,9 +21,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import android.net.Uri
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -30,25 +37,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.ui.screens.*
 import com.example.decisionjournal.ui.theme.Ink
 import com.example.decisionjournal.ui.theme.Hairline
-import com.example.decisionjournal.ui.theme.MistGreen
 
 @Composable
 fun DecisionJournalApp(initialDecisionId: Long? = null) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route.orEmpty()
-    val showNavigation = route in setOf("home", "decisions", "mine")
+    val isDecisionsRoute = route.startsWith("decisions")
+    val showNavigation = route == "home" || isDecisionsRoute || route == "mine"
     Scaffold(bottomBar = {
         if (showNavigation) NavigationBar(
-            modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .border(1.dp, Hairline.copy(alpha = 0.75f), RoundedCornerShape(24.dp)),
-            containerColor = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.border(1.dp, Hairline.copy(alpha = 0.8f)),
+            containerColor = MaterialTheme.colorScheme.background,
             tonalElevation = 0.dp,
         ) {
             val navColors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                indicatorColor = MistGreen,
+                indicatorColor = MaterialTheme.colorScheme.background,
                 selectedIconColor = Ink,
                 selectedTextColor = Ink,
                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -60,21 +64,21 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     launchSingleTop = true
                     restoreState = true
                 }
-            }, { Icon(Icons.Rounded.Home, null, Modifier.size(22.dp)) }, label = { Text("今天") }, colors = navColors)
-            NavigationBarItem(route == "decisions", {
-                nav.navigate("decisions") {
+            }, { ArchiveNavigationIcon(Icons.Rounded.Home, route == "home") }, label = { Text("今天") }, colors = navColors)
+            NavigationBarItem(isDecisionsRoute, {
+                nav.navigate("decisions?filter=all") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
                 }
-            }, { Icon(Icons.Rounded.CalendarToday, null, Modifier.size(22.dp)) }, label = { Text("决定") }, colors = navColors)
+            }, { ArchiveNavigationIcon(Icons.Rounded.CalendarToday, isDecisionsRoute) }, label = { Text("决定") }, colors = navColors)
             NavigationBarItem(route == "mine", {
                 nav.navigate("mine") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
                 }
-            }, { Icon(Icons.Rounded.PersonOutline, null, Modifier.size(22.dp)) }, label = { Text("我的") }, colors = navColors)
+            }, { ArchiveNavigationIcon(Icons.Rounded.PersonOutline, route == "mine") }, label = { Text("我的") }, colors = navColors)
         }
     }) { padding ->
         NavHost(
@@ -82,9 +86,36 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
             startDestination = initialDecisionId?.let { "detail/$it" } ?: "home",
             modifier = Modifier.padding(padding).background(MaterialTheme.colorScheme.background),
         ) {
-            composable("home") { HomeScreen({ nav.navigate("create") }, { nav.navigate("detail/$it") }) }
-            composable("decisions") { MyDecisionsScreen(onOpen = { nav.navigate("detail/$it") }, onCreate = { nav.navigate("create") }, showStats = false) }
-            composable("mine") { MyDecisionsScreen(onOpen = { nav.navigate("detail/$it") }, onCreate = { nav.navigate("create") }, showStats = true) }
+            composable("home") {
+                HomeScreen(
+                    onCreate = { nav.navigate("create") },
+                    onOpen = { nav.navigate("detail/$it") },
+                    onViewDue = { nav.navigate("decisions?filter=due") },
+                )
+            }
+            composable(
+                "decisions?filter={filter}&query={query}",
+                arguments = listOf(
+                    navArgument("filter") { type = NavType.StringType; defaultValue = "all" },
+                    navArgument("query") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                MyDecisionsScreen(
+                    onOpen = { nav.navigate("detail/$it") },
+                    onCreate = { nav.navigate("create") },
+                    showStats = false,
+                    initialDueFilter = entry.arguments?.getString("filter") == "due",
+                    initialSearchQuery = entry.arguments?.getString("query").orEmpty(),
+                )
+            }
+            composable("mine") {
+                MyDecisionsScreen(
+                    onOpen = { nav.navigate("detail/$it") },
+                    onCreate = { nav.navigate("create") },
+                    showStats = true,
+                    onExploreKeyword = { keyword -> nav.navigate("decisions?filter=all&query=${Uri.encode(keyword)}") },
+                )
+            }
             composable("create?decisionId={decisionId}", arguments = listOf(navArgument("decisionId") { type = NavType.LongType; defaultValue = -1L })) { entry ->
                 val decisionId = entry.arguments?.getLong("decisionId")?.takeIf { it > 0L }
                 CreateDecisionScreen(
@@ -126,5 +157,19 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ArchiveNavigationIcon(icon: ImageVector, selected: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(21.dp))
+        Spacer(Modifier.height(4.dp))
+        Spacer(
+            Modifier
+                .width(16.dp)
+                .height(2.dp)
+                .background(if (selected) Ink else Color.Transparent, RoundedCornerShape(1.dp)),
+        )
     }
 }

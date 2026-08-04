@@ -50,6 +50,12 @@ sealed interface DecisionEditorState {
     data class Content(val data: com.example.decisionjournal.data.DecisionEditorData) : DecisionEditorState
 }
 
+sealed interface DecisionLoadState {
+    data object Loading : DecisionLoadState
+    data object Missing : DecisionLoadState
+    data class Content(val decision: com.example.decisionjournal.data.model.Decision) : DecisionLoadState
+}
+
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel @Inject constructor(repo: DecisionRepository) : ViewModel() {
@@ -70,16 +76,23 @@ class DecisionsViewModel @Inject constructor(repo: DecisionRepository) : ViewMod
     val periodCounts = combine(decisions, now)
         { items, currentTime -> calculatePeriodCounts(items, currentDate(currentTime), ZoneId.systemDefault()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PeriodCounts())
+    val statusCounts = combine(decisions, now)
+        { items, currentTime -> calculateDecisionStatusCounts(items, currentTime) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionStatusCounts())
     val filteredDecisions = combine(decisions, filter, now) { items, currentFilter, currentTime ->
-        filterDecisions(items, currentFilter, currentDate(currentTime), ZoneId.systemDefault())
+        filterDecisions(items, currentFilter, currentDate(currentTime), ZoneId.systemDefault(), currentTime)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun selectFilter(value: DecisionFilter) {
-        filter.value = if (filter.value == value) DecisionFilter.All else value
+        filter.value = value
     }
 
     fun clearFilter() {
         filter.value = DecisionFilter.All
+    }
+
+    fun setFilter(value: DecisionFilter) {
+        filter.value = value
     }
 }
 
@@ -134,7 +147,9 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var deleteError: String? by mutableStateOf(null)
         private set
-    fun decision(id: Long) = repo.observe(id)
+    fun decisionState(id: Long) = repo.observe(id)
+        .map { decision -> decision?.let(DecisionLoadState::Content) ?: DecisionLoadState.Missing }
+        .onStart { emit(DecisionLoadState.Loading) }
     fun choices(id: Long) = repo.choices(id)
     fun reviews(id: Long) = repo.reviews(id)
     fun delete(id: Long, done: () -> Unit) = viewModelScope.launch {
@@ -166,8 +181,11 @@ class ReviewViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
         private set
-    fun decision(id: Long) = repo.observe(id)
+    fun decisionState(id: Long) = repo.observe(id)
+        .map { decision -> decision?.let(DecisionLoadState::Content) ?: DecisionLoadState.Missing }
+        .onStart { emit(DecisionLoadState.Loading) }
     fun choices(id: Long) = repo.choices(id)
+    fun reviews(id: Long) = repo.reviews(id)
     fun save(input: ReviewInput, done: (SaveOutcome) -> Unit) = viewModelScope.launch {
         if (saveState == SaveState.Saving) return@launch
         error = null

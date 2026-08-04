@@ -24,8 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,12 +37,14 @@ import com.example.decisionjournal.data.ReviewInput
 import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.ui.ReviewViewModel
+import com.example.decisionjournal.ui.DecisionLoadState
 import com.example.decisionjournal.ui.SaveState
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.JournalErrorText
 import com.example.decisionjournal.ui.components.JournalTextField
 import com.example.decisionjournal.ui.components.PrimaryActionButton
 import com.example.decisionjournal.ui.components.SoftSurfaceCard
+import com.example.decisionjournal.ui.components.ArchiveKicker
 import com.example.decisionjournal.ui.theme.JournalDimens
 import com.example.decisionjournal.ui.theme.MistBlue
 import com.example.decisionjournal.ui.theme.MistGreen
@@ -48,23 +53,29 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-private val reviewDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
+private val reviewDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)
+private val expectationMatchSaver: Saver<ExpectationMatch?, String> = Saver(
+    save = { value -> value?.name.orEmpty() },
+    restore = { value -> value.takeIf(String::isNotBlank)?.let(ExpectationMatch::valueOf) },
+)
 
 @Composable
 fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
-    var result by remember { mutableStateOf("") }
-    var satisfaction by remember { mutableStateOf("") }
-    var nextReviewDate by remember { mutableStateOf<Long?>(null) }
-    var expectationMatch by remember { mutableStateOf<ExpectationMatch?>(null) }
-    var accurateJudgment by remember { mutableStateOf("") }
-    var unexpectedFinding by remember { mutableStateOf("") }
-    var nextTimeNote by remember { mutableStateOf("") }
-    var hasUnsavedChanges by remember { mutableStateOf(false) }
-    var confirmExit by remember { mutableStateOf(false) }
+    var result by rememberSaveable { mutableStateOf("") }
+    var satisfaction by rememberSaveable { mutableStateOf("") }
+    var nextReviewDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    var expectationMatch by rememberSaveable(stateSaver = expectationMatchSaver) { mutableStateOf<ExpectationMatch?>(null) }
+    var accurateJudgment by rememberSaveable { mutableStateOf("") }
+    var unexpectedFinding by rememberSaveable { mutableStateOf("") }
+    var nextTimeNote by rememberSaveable { mutableStateOf("") }
+    var hasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
+    var confirmExit by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
-    val decision by vm.decision(decisionId).collectAsStateWithLifecycle(null)
+    val decisionState by vm.decisionState(decisionId).collectAsStateWithLifecycle(DecisionLoadState.Loading)
     val choices by vm.choices(decisionId).collectAsStateWithLifecycle(emptyList())
+    val reviews by vm.reviews(decisionId).collectAsStateWithLifecycle(emptyList())
 
     fun showDatePicker() {
         val date = nextReviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
@@ -84,6 +95,17 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
         if (hasUnsavedChanges && vm.saveState != SaveState.Saving) confirmExit = true else onBack()
     }
     BackHandler(onBack = ::requestBack)
+    val decision = when (val state = decisionState) {
+        DecisionLoadState.Loading -> {
+            ReviewStatePage("正在打开这段记录…", onBack)
+            return
+        }
+        DecisionLoadState.Missing -> {
+            ReviewStatePage("这条决定可能已被删除，无法记录复盘。", onBack, missing = true)
+            return
+        }
+        is DecisionLoadState.Content -> state.decision
+    }
 
     Column(
         Modifier
@@ -93,12 +115,12 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
-        JournalTopBar(title = "未来再看", onBack = ::requestBack)
-        decision?.let { current ->
+        JournalTopBar(title = "后来", subtitle = "把事情后来走到哪里写下来", onBack = ::requestBack)
+        decision.let { current ->
             val selectedChoice = choices.firstOrNull { it.id == current.selectedChoiceId }
             SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("当时的记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ArchiveKicker("当时的记录")
                     Text(current.question, style = MaterialTheme.typography.titleMedium)
                     selectedChoice?.let { Text("当时选择：${it.text}", style = MaterialTheme.typography.bodyMedium) }
                     current.expectedOutcome?.takeIf { it.isNotBlank() }?.let {
@@ -107,21 +129,43 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
                     current.futureNote?.takeIf { it.isNotBlank() }?.let {
                         Text("写给未来的自己：$it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    reviews.firstOrNull()?.let { latestReview ->
+                        Spacer(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+                        )
+                        ArchiveKicker("此前回看")
+                        Text(
+                            "已记录 ${reviews.size} 次 · 最近一次 ${formatReviewDate(latestReview.createdAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "上次写下：${latestReview.result}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "本次保存会追加一条新记录，不会覆盖之前的观察。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
-        if (decision == null) {
-            JournalErrorText("这条决定不存在或已被删除，无法记录复盘。")
-        }
         SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistSand, hero = true) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("回到当时的自己", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("回到当时", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("当时的决定，现在感觉如何？", style = MaterialTheme.typography.headlineSmall)
                 Text("不用给过去打分，只记录事情后来走到了哪里。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
-        Text("后来发生了什么？", style = MaterialTheme.typography.titleMedium)
+        Text("后来发生了什么？", style = MaterialTheme.typography.headlineSmall)
         JournalTextField(
             value = result,
             onValueChange = { hasUnsavedChanges = true; result = it },
@@ -131,15 +175,19 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
         )
 
         Text("结果和预期相比如何？", style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            ExpectationMatch.values().forEach { match ->
-                ReviewChoiceChip(
-                    label = match.label(),
-                    selected = expectationMatch == match,
-                    onClick = { hasUnsavedChanges = true; expectationMatch = match },
-                    modifier = Modifier.weight(1f),
-                    color = MistBlue,
-                )
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ExpectationMatch.values().toList().chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { match ->
+                        ReviewChoiceChip(
+                            label = match.label(),
+                            selected = expectationMatch == match,
+                            onClick = { hasUnsavedChanges = true; expectationMatch = match },
+                            modifier = Modifier.weight(1f),
+                            color = MistBlue,
+                        )
+                    }
+                }
             }
         }
 
@@ -181,7 +229,7 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
         PrimaryActionButton(
             if (vm.saveState == SaveState.Saving) "保存中…" else "保存复盘",
             onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
-            enabled = vm.saveState != SaveState.Saving && decision != null && result.trim().isNotEmpty() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
+            enabled = vm.saveState != SaveState.Saving && result.trim().isNotEmpty() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
     if (confirmExit) AlertDialog(
@@ -194,6 +242,26 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
 }
 
 @Composable
+private fun ReviewStatePage(message: String, onBack: () -> Unit, missing: Boolean = false) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+        verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
+    ) {
+        JournalTopBar(title = "后来", subtitle = "把事情后来走到哪里写下来", onBack = onBack)
+        SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (missing) "无法记录复盘" else "正在加载", style = MaterialTheme.typography.titleMedium)
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                if (missing) TextButton(onClick = onBack) { Text("返回") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ReviewChoiceChip(
     label: String,
     selected: Boolean,
@@ -203,11 +271,11 @@ private fun ReviewChoiceChip(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(46.dp),
+        modifier = modifier.height(52.dp),
         shape = MaterialTheme.shapes.small,
         color = if (selected) color else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
     ) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Text(if (selected) "✓ $label" else label, style = MaterialTheme.typography.labelMedium)
@@ -221,3 +289,6 @@ private fun ExpectationMatch.label(): String = when (this) {
     ExpectationMatch.WORSE -> "比预期差"
     ExpectationMatch.UNCLEAR -> "还不确定"
 }
+
+private fun formatReviewDate(timestamp: Long): String =
+    Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().format(reviewDateFormatter)

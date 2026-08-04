@@ -79,6 +79,7 @@ class DemoDataSeeder @Inject constructor(
                     nextTimeNote = "以后评估机会时，也要主动了解团队协作方式。",
                 ),
             ),
+            selectedIndex = 0,
         )
 
         // 未来待复盘：用于验证未来日期、通知任务和首页最近决定。
@@ -244,6 +245,7 @@ class DemoDataSeeder @Inject constructor(
                             nextTimeNote = "下一次会先设定更小、更容易验证的行动。",
                         ),
                     ),
+                    selectedIndex = index % 2,
                 )
             } else {
                 seedActive(decision, choices, selectedIndex = index % 2)
@@ -263,8 +265,16 @@ class DemoDataSeeder @Inject constructor(
         }
     }
 
-    private suspend fun seedReviewed(decision: Decision, choices: List<Choice>, reviews: List<Review>) {
-        val id = dao.save(decision.copy(status = DecisionStatus.ACTIVE), choices)
+    private suspend fun seedReviewed(
+        decision: Decision,
+        choices: List<Choice>,
+        reviews: List<Review>,
+        selectedIndex: Int? = null,
+    ) {
+        val id = dao.save(
+            decision.copy(status = DecisionStatus.ACTIVE, selectedChoiceId = selectedIndex?.toLong()),
+            choices,
+        )
         reviews.sortedBy { it.createdAt }.forEach { review ->
             dao.saveReview(review.copy(decisionId = id), null, review.createdAt)
         }

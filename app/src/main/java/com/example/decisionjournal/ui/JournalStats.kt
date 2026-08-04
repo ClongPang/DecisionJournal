@@ -25,6 +25,10 @@ data class CustomDateRange(val start: LocalDate, val endInclusive: LocalDate)
 
 sealed interface DecisionFilter {
     data object All : DecisionFilter
+    data object Due : DecisionFilter
+    data object Upcoming : DecisionFilter
+    data object Reviewed : DecisionFilter
+    data object Unscheduled : DecisionFilter
     data class Preset(val period: DecisionPeriod) : DecisionFilter
     data class Custom(val range: CustomDateRange) : DecisionFilter
 }
@@ -34,6 +38,13 @@ data class PeriodCounts(
     val week: Int = 0,
     val month: Int = 0,
     val year: Int = 0,
+)
+
+data class DecisionStatusCounts(
+    val due: Int = 0,
+    val upcoming: Int = 0,
+    val reviewed: Int = 0,
+    val unscheduled: Int = 0,
 )
 
 const val INITIAL_DECISION_PAGE_SIZE = 10
@@ -69,17 +80,60 @@ fun calculatePeriodCounts(decisions: List<Decision>, date: LocalDate, zone: Zone
         year = countCreatedInRange(decisions, dateTimeRange(DecisionPeriod.YEAR, date, zone)),
     )
 
-fun filterDecisions(decisions: List<Decision>, filter: DecisionFilter, date: LocalDate, zone: ZoneId): List<Decision> {
+fun calculateDecisionStatusCounts(decisions: List<Decision>, now: Long): DecisionStatusCounts =
+    DecisionStatusCounts(
+        due = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED },
+        upcoming = decisions.count { it.reviewDate != null && it.reviewDate > now && it.status != DecisionStatus.REVIEWED },
+        reviewed = decisions.count { it.status == DecisionStatus.REVIEWED },
+        unscheduled = decisions.count { it.reviewDate == null && it.status != DecisionStatus.REVIEWED },
+    )
+
+fun filterDecisions(
+    decisions: List<Decision>,
+    filter: DecisionFilter,
+    date: LocalDate,
+    zone: ZoneId,
+    now: Long = System.currentTimeMillis(),
+): List<Decision> {
     val range = when (filter) {
         DecisionFilter.All -> null
+        DecisionFilter.Due -> null
+        DecisionFilter.Upcoming -> null
+        DecisionFilter.Reviewed -> null
+        DecisionFilter.Unscheduled -> null
         is DecisionFilter.Preset -> dateTimeRange(filter.period, date, zone)
         is DecisionFilter.Custom -> dateTimeRange(filter.range, zone)
     }
     return decisions
         .asSequence()
         .filter { range == null || it.decisionDate in range.startInclusive until range.endExclusive }
+        .filter {
+            when (filter) {
+                DecisionFilter.Due -> it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED
+                DecisionFilter.Upcoming -> it.reviewDate != null && it.reviewDate > now && it.status != DecisionStatus.REVIEWED
+                DecisionFilter.Reviewed -> it.status == DecisionStatus.REVIEWED
+                DecisionFilter.Unscheduled -> it.reviewDate == null && it.status != DecisionStatus.REVIEWED
+                else -> true
+            }
+        }
         .sortedWith(compareByDescending<Decision> { it.decisionDate }.thenByDescending { it.id })
         .toList()
+}
+
+/** Filters the already-selected archive scope without changing its sort order. */
+fun searchDecisions(decisions: List<Decision>, query: String): List<Decision> {
+    val keyword = query.trim()
+    if (keyword.isEmpty()) return decisions
+    return decisions.filter { decision ->
+        buildList {
+            add(decision.question)
+            decision.context?.let(::add)
+            decision.futureNote?.let(::add)
+            decision.expectedOutcome?.let(::add)
+            addAll(decision.benefits)
+            addAll(decision.concerns)
+        }.any { it.contains(keyword, ignoreCase = true) }
+    }
 }
 
 private fun countCreatedInRange(decisions: List<Decision>, range: DateTimeRange): Int =

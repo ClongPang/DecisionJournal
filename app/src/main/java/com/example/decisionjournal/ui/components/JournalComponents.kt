@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
@@ -22,7 +24,11 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.example.decisionjournal.ui.theme.JournalDimens
 import com.example.decisionjournal.ui.theme.CardWhite
@@ -40,9 +46,9 @@ fun JournalTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (onBack != null) {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
@@ -60,19 +66,78 @@ fun SoftSurfaceCard(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     hero: Boolean = false,
+    borderColor: Color? = null,
     onClick: (() -> Unit)? = null,
+    accessibilityLabel: String? = null,
+    accessibilityState: String? = null,
     content: @Composable () -> Unit,
 ) {
+    val accessibleModifier = if (accessibilityLabel == null && accessibilityState == null) {
+        modifier
+    } else {
+        modifier.semantics(mergeDescendants = accessibilityLabel != null) {
+            accessibilityLabel?.let { contentDescription = it }
+            accessibilityState?.let { stateDescription = it }
+        }
+    }
     Surface(
         onClick = onClick ?: {},
         enabled = onClick != null,
-        modifier = modifier,
+        modifier = accessibleModifier,
         shape = if (hero) MaterialTheme.shapes.large else MaterialTheme.shapes.medium,
         color = containerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            borderColor ?: Hairline.copy(alpha = if (hero) 0.9f else 0.72f),
+        ),
         content = content,
+    )
+}
+
+@Composable
+fun NarrativeCard(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primaryContainer,
+    onClick: (() -> Unit)? = null,
+    accessibilityLabel: String? = null,
+    accessibilityState: String? = null,
+    content: @Composable () -> Unit,
+) = SoftSurfaceCard(
+    modifier = modifier,
+    containerColor = color,
+    hero = true,
+    onClick = onClick,
+    accessibilityLabel = accessibilityLabel,
+    accessibilityState = accessibilityState,
+    content = content,
+)
+
+@Composable
+fun ArchiveKicker(text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Spacer(
+            Modifier
+                .width(28.dp)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)),
+        )
+    }
+}
+
+@Composable
+fun ChoiceSelectionRail(modifier: Modifier = Modifier) {
+    Spacer(
+        modifier
+            .width(3.dp)
+            .height(28.dp)
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
     )
 }
 
@@ -87,7 +152,7 @@ fun PrimaryActionButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(JournalDimens.buttonHeight),
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(16.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -116,7 +181,7 @@ fun JournalTextField(
         placeholder = placeholder,
         minLines = minLines,
         maxLines = maxLines,
-        shape = MaterialTheme.shapes.small,
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = CardWhite,
             unfocusedContainerColor = CardWhite.copy(alpha = 0.62f),
@@ -170,7 +235,7 @@ fun EmptyJournalState(message: String, actionText: String, onAction: () -> Unit)
 @Composable
 fun StatusPill(text: String, color: Color = MaterialTheme.colorScheme.primaryContainer) {
     Surface(
-        shape = MaterialTheme.shapes.small,
+        shape = RoundedCornerShape(99.dp),
         color = color,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
     ) {

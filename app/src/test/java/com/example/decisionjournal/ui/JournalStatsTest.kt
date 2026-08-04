@@ -67,6 +67,57 @@ class JournalStatsTest {
         assertEquals(listOf("晚", "早"), result.map { it.question })
         assertEquals(listOf("范围外", "晚", "早"), filterDecisions(decisions, DecisionFilter.All, date, zone).map { it.question })
     }
+
+    @Test
+    fun dueFilterShowsOnlyActiveDecisionsWhoseReviewDateHasArrived() {
+        val date = LocalDate.of(2026, 8, 5)
+        fun at(day: LocalDate): Long = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val now = at(date)
+        val decisions = listOf(
+            Decision(question = "已到期", decisionDate = at(date.minusDays(1)), reviewDate = at(date.minusDays(1))),
+            Decision(question = "今天回看", decisionDate = now, reviewDate = now),
+            Decision(question = "未来回看", reviewDate = at(date.plusDays(1))),
+            Decision(question = "已完成", reviewDate = at(date.minusDays(1)), status = DecisionStatus.REVIEWED),
+            Decision(question = "未设日期"),
+        )
+
+        assertEquals(
+            listOf("今天回看", "已到期"),
+            filterDecisions(decisions, DecisionFilter.Due, date, zone, now).map { it.question },
+        )
+    }
+
+    @Test
+    fun statusFiltersAndCountsCoverEveryDecisionLifecycleState() {
+        val date = LocalDate.of(2026, 8, 5)
+        fun at(day: LocalDate): Long = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val now = at(date)
+        val decisions = listOf(
+            Decision(question = "待回看", reviewDate = at(date.minusDays(1))),
+            Decision(question = "等待中", reviewDate = at(date.plusDays(7))),
+            Decision(question = "已回看", status = DecisionStatus.REVIEWED),
+            Decision(question = "未设日期"),
+        )
+
+        assertEquals(DecisionStatusCounts(1, 1, 1, 1), calculateDecisionStatusCounts(decisions, now))
+        assertEquals(listOf("等待中"), filterDecisions(decisions, DecisionFilter.Upcoming, date, zone, now).map { it.question })
+        assertEquals(listOf("已回看"), filterDecisions(decisions, DecisionFilter.Reviewed, date, zone, now).map { it.question })
+        assertEquals(listOf("未设日期"), filterDecisions(decisions, DecisionFilter.Unscheduled, date, zone, now).map { it.question })
+    }
+
+    @Test
+    fun searchFiltersAcrossDecisionNarrativeFieldsWithoutChangingScopeOrder() {
+        val decisions = listOf(
+            Decision(question = "是否搬家", context = "想离公司近一点", benefits = listOf("通勤")),
+            Decision(question = "学习计划", concerns = listOf("时间成本"), futureNote = "保持节奏"),
+            Decision(question = "工作选择", expectedOutcome = "获得成长空间"),
+        )
+
+        assertEquals(listOf("是否搬家"), searchDecisions(decisions, "通勤").map { it.question })
+        assertEquals(listOf("学习计划"), searchDecisions(decisions, "节奏").map { it.question })
+        assertEquals(listOf("工作选择"), searchDecisions(decisions, "成长").map { it.question })
+        assertEquals(decisions, searchDecisions(decisions, "   "))
+    }
     @Test
     fun calculatesCompletedDueAndMostCaredAbout() {
         val decisions = listOf(
