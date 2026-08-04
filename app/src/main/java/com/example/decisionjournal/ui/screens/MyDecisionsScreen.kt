@@ -27,9 +27,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +48,10 @@ import com.example.decisionjournal.ui.DecisionsViewModel
 import com.example.decisionjournal.ui.CustomDateRange
 import com.example.decisionjournal.ui.DecisionFilter
 import com.example.decisionjournal.ui.DecisionPeriod
+import com.example.decisionjournal.ui.INITIAL_DECISION_PAGE_SIZE
 import com.example.decisionjournal.ui.PeriodCounts
 import com.example.decisionjournal.ui.calculateSelfInsights
+import com.example.decisionjournal.ui.nextDecisionPageSize
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.SectionHeader
@@ -77,7 +81,9 @@ fun MyDecisionsScreen(
     val filteredDecisions by vm.filteredDecisions.collectAsStateWithLifecycle()
     val now = remember { System.currentTimeMillis() }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scrollState = rememberScrollState()
     var customError by remember { mutableStateOf<String?>(null) }
+    var visibleDecisionCount by remember { mutableStateOf(INITIAL_DECISION_PAGE_SIZE) }
 
     fun chooseCustomRange() {
         customError = null
@@ -111,9 +117,22 @@ fun MyDecisionsScreen(
         ).apply { datePicker.maxDate = System.currentTimeMillis() }.show()
     }
 
+    val timelineDecisions = if (showStats) decisions else filteredDecisions
+    LaunchedEffect(showStats, selectedFilter, timelineDecisions.size) {
+        visibleDecisionCount = INITIAL_DECISION_PAGE_SIZE
+    }
+    LaunchedEffect(scrollState, timelineDecisions.size, visibleDecisionCount) {
+        snapshotFlow { scrollState.value to scrollState.maxValue }.collect { (offset, maxOffset) ->
+            val nearBottom = maxOffset == 0 || offset >= (maxOffset - 96).coerceAtLeast(0)
+            if (nearBottom && visibleDecisionCount < timelineDecisions.size) {
+                visibleDecisionCount = nextDecisionPageSize(visibleDecisionCount, timelineDecisions.size)
+            }
+        }
+    }
+
     Column(
         Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
     ) {
         JournalTopBar(
@@ -145,7 +164,6 @@ fun MyDecisionsScreen(
             }
         }
 
-        val timelineDecisions = if (showStats) decisions else filteredDecisions
         val timelineTitle = if (showStats) "决策时间线" else when (val filter = selectedFilter) {
             DecisionFilter.All -> "全部记录"
             is DecisionFilter.Preset -> "${filter.period.label()}的决定"
@@ -159,7 +177,16 @@ fun MyDecisionsScreen(
                 if (showStats || selectedFilter == DecisionFilter.All) onCreate else vm::clearFilter,
             )
         } else {
-            TimelineContainer(timelineDecisions, now, onOpen)
+            val displayedDecisions = timelineDecisions.take(visibleDecisionCount)
+            TimelineContainer(displayedDecisions, now, onOpen)
+            if (displayedDecisions.size < timelineDecisions.size) {
+                Text(
+                    "继续滑动加载更多 · 还剩 ${timelineDecisions.size - displayedDecisions.size} 条",
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
     }

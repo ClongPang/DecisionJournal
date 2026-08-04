@@ -11,6 +11,14 @@ class JournalStatsTest {
     private val zone = ZoneId.of("Asia/Shanghai")
 
     @Test
+    fun decisionPaginationStartsWithTenAndAddsTwentyUntilExhausted() {
+        assertEquals(10, INITIAL_DECISION_PAGE_SIZE)
+        assertEquals(30, nextDecisionPageSize(INITIAL_DECISION_PAGE_SIZE, 100))
+        assertEquals(45, nextDecisionPageSize(30, 45))
+        assertEquals(10, nextDecisionPageSize(10, 10))
+    }
+
+    @Test
     fun decisionDateDefaultsToCreatedAtButCanBeCustomized() {
         val createdAt = LocalDate.of(2026, 8, 5).atStartOfDay(zone).toInstant().toEpochMilli()
         val defaultDecision = Decision(question = "默认日期", createdAt = createdAt)

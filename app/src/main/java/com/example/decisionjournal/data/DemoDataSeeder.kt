@@ -26,7 +26,13 @@ class DemoDataSeeder @Inject constructor(
     suspend fun seedIfNeeded() {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (prefs.getBoolean(SEEDED_KEY, false)) return
-        if (dao.observeAll().first().isNotEmpty()) {
+        val existingDecisions = dao.observeAll().first()
+        if (prefs.getBoolean(PREVIOUS_SEEDED_KEY, false) && existingDecisions.isNotEmpty()) {
+            seedBulkWarmupData()
+            prefs.edit().putBoolean(SEEDED_KEY, true).apply()
+            return
+        }
+        if (existingDecisions.isNotEmpty()) {
             prefs.edit().putBoolean(SEEDED_KEY, true).apply()
             return
         }
@@ -179,7 +185,68 @@ class DemoDataSeeder @Inject constructor(
             selectedIndex = null,
         )
 
+        seedBulkWarmupData()
+
         prefs.edit().putBoolean(SEEDED_KEY, true).apply()
+    }
+
+    /**
+     * 额外生成 48 条跨日期的决定，让 Debug 构建可以完整验证分页、筛选、时间线和统计。
+     */
+    private suspend fun seedBulkWarmupData() {
+        val topics = listOf(
+            "是否要开始规律运动？" to ("最近久坐很多，希望每周安排固定运动时间。" to listOf("健康", "时间")),
+            "要不要换一部手机？" to ("旧手机仍能使用，但续航和拍照已经不太够用。" to listOf("金钱", "便利")),
+            "是否接受朋友的合作邀请？" to ("合作机会不错，但需要重新分配现有项目时间。" to listOf("成长", "关系")),
+            "这次假期要不要独自旅行？" to ("想拥有完全按自己节奏安排的假期。" to listOf("自由", "安全")),
+            "要不要学习一门新语言？" to ("工作中可能会用到，也对文化本身感兴趣。" to listOf("学习", "成长")),
+            "是否把家里的房间重新布置？" to ("现在的空间比较拥挤，影响工作和休息。" to listOf("生活平衡", "金钱")),
+        )
+        repeat(48) { index ->
+            val days = (index * 7L) % 365L
+            val topic = topics[index % topics.size]
+            val decision = Decision(
+                question = "预热${(index + 1).toString().padStart(2, '0')}：${topic.first}",
+                context = topic.second.first,
+                benefits = listOf(topic.second.second[0], topic.second.second[1]),
+                concerns = listOf("执行成本", if (index % 2 == 0) "不确定" else "生活平衡"),
+                futureNote = if (index % 3 == 0) "希望未来的我能记得，当时已经认真比较过。" else null,
+                expectedOutcome = "先用一段时间验证这个选择是否适合现在的生活。",
+                confidence = (index % 5) + 1,
+                createdAt = daysAgo(days),
+                updatedAt = daysAgo((days - 1).coerceAtLeast(0)),
+                decisionDate = daysAgo(days),
+                reviewDate = when {
+                    index % 7 == 0 -> daysAgo((index % 4).toLong())
+                    index % 5 == 0 -> daysFromNow(7 + (index % 14).toLong())
+                    else -> null
+                },
+            )
+            val choices = listOf(
+                Choice(decisionId = 0, text = "先小范围尝试", benefits = listOf("风险较低", "能获得反馈"), concerns = listOf("需要投入额外时间")),
+                Choice(decisionId = 0, text = "暂时保持现状", benefits = listOf("节省精力", "不改变习惯"), concerns = listOf("可能错过机会")),
+            )
+            if (index % 6 == 0) {
+                seedReviewed(
+                    decision = decision.copy(reviewDate = null),
+                    choices = choices,
+                    reviews = listOf(
+                        Review(
+                            decisionId = 0,
+                            createdAt = daysAgo((days - 10).coerceAtLeast(0)),
+                            result = "实际执行后发现，结果基本符合当时的预期，也获得了一些新的反馈。",
+                            satisfaction = (index % 5) + 1,
+                            expectationMatch = if (index % 2 == 0) ExpectationMatch.EXPECTED else ExpectationMatch.BETTER,
+                            accurateJudgment = "提前考虑到执行成本是有帮助的。",
+                            unexpectedFinding = "真正影响结果的是持续执行，而不是最初的选择。",
+                            nextTimeNote = "下一次会先设定更小、更容易验证的行动。",
+                        ),
+                    ),
+                )
+            } else {
+                seedActive(decision, choices, selectedIndex = index % 2)
+            }
+        }
     }
 
     private suspend fun seedActive(decision: Decision, choices: List<Choice>, selectedIndex: Int? = null) {
@@ -200,6 +267,7 @@ class DemoDataSeeder @Inject constructor(
 
     private companion object {
         const val PREFS_NAME = "demo-data"
-        const val SEEDED_KEY = "seeded-v2"
+        const val PREVIOUS_SEEDED_KEY = "seeded-v2"
+        const val SEEDED_KEY = "seeded-v3"
     }
 }

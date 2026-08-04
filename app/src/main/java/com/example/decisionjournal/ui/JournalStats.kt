@@ -35,6 +35,12 @@ data class PeriodCounts(
     val year: Int = 0,
 )
 
+const val INITIAL_DECISION_PAGE_SIZE = 10
+const val DECISION_PAGE_SIZE = 20
+
+fun nextDecisionPageSize(currentSize: Int, totalSize: Int): Int =
+    (currentSize + DECISION_PAGE_SIZE).coerceAtMost(totalSize)
+
 fun dateTimeRange(period: DecisionPeriod, date: LocalDate, zone: ZoneId): DateTimeRange = when (period) {
     DecisionPeriod.TODAY -> rangeBetween(date, date.plusDays(1), zone)
     DecisionPeriod.WEEK -> {
