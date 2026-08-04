@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.CalendarToday
@@ -24,11 +24,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,14 +38,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.DecisionsViewModel
 import com.example.decisionjournal.ui.CustomDateRange
 import com.example.decisionjournal.ui.DecisionFilter
 import com.example.decisionjournal.ui.DecisionPeriod
-import com.example.decisionjournal.ui.INITIAL_DECISION_PAGE_SIZE
 import com.example.decisionjournal.ui.PeriodCounts
 import com.example.decisionjournal.ui.calculateSelfInsights
-import com.example.decisionjournal.ui.nextDecisionPageSize
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.SectionHeader
@@ -75,11 +72,9 @@ fun MyDecisionsScreen(
     val periodCounts by vm.periodCounts.collectAsStateWithLifecycle()
     val selectedFilter by vm.selectedFilter.collectAsStateWithLifecycle()
     val filteredDecisions by vm.filteredDecisions.collectAsStateWithLifecycle()
-    val now = remember { System.currentTimeMillis() }
+    val now by vm.now.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scrollState = rememberScrollState()
     var customError by remember { mutableStateOf<String?>(null) }
-    var visibleDecisionCount by remember { mutableStateOf(INITIAL_DECISION_PAGE_SIZE) }
 
     fun chooseCustomRange() {
         customError = null
@@ -114,82 +109,68 @@ fun MyDecisionsScreen(
     }
 
     val timelineDecisions = if (showStats) decisions else filteredDecisions
-    LaunchedEffect(showStats, selectedFilter, timelineDecisions.size) {
-        visibleDecisionCount = INITIAL_DECISION_PAGE_SIZE
-    }
-    LaunchedEffect(scrollState, timelineDecisions.size, visibleDecisionCount) {
-        snapshotFlow { scrollState.value to scrollState.maxValue }.collect { (offset, maxOffset) ->
-            val nearBottom = maxOffset == 0 || offset >= (maxOffset - 96).coerceAtLeast(0)
-            if (nearBottom && visibleDecisionCount < timelineDecisions.size) {
-                visibleDecisionCount = nextDecisionPageSize(visibleDecisionCount, timelineDecisions.size)
-            }
-        }
+    val insights = remember(decisions) { calculateSelfInsights(decisions) }
+    val timelineTitle = if (showStats) "决策时间线" else when (val filter = selectedFilter) {
+        DecisionFilter.All -> "全部记录"
+        is DecisionFilter.Preset -> "${filter.period.label()}的决定"
+        is DecisionFilter.Custom -> "指定范围内的决定"
     }
 
-    Column(
-        Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical)
-            .verticalScroll(scrollState),
+    LazyColumn(
+        modifier = Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
     ) {
-        JournalTopBar(
-            title = if (showStats) "认识自己" else "全部决定",
-            subtitle = if (showStats) "看见自己是如何做决定的" else null,
-        )
-
-        if (!showStats) {
-            PeriodOverview(
-                counts = periodCounts,
-                selectedFilter = selectedFilter,
-                customError = customError,
-                onSelect = { vm.selectFilter(DecisionFilter.Preset(it)) },
-                onCustomRange = ::chooseCustomRange,
-                onClear = vm::clearFilter,
+        item {
+            JournalTopBar(
+                title = if (showStats) "认识自己" else "全部决定",
+                subtitle = if (showStats) "看见自己是如何做决定的" else null,
             )
-        }
-
-        if (showStats) {
-            Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
-            Text(
-                "记录是给未来的线索，不是给现在的评分。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            calculateSelfInsights(decisions).forEach { insight ->
-                SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(insight.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(insight.description, style = MaterialTheme.typography.titleMedium)
-                        Text("来自 ${insight.evidenceCount} 条记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!showStats) {
+                PeriodOverview(
+                    counts = periodCounts,
+                    selectedFilter = selectedFilter,
+                    customError = customError,
+                    onSelect = { vm.selectFilter(DecisionFilter.Preset(it)) },
+                    onCustomRange = ::chooseCustomRange,
+                    onClear = vm::clearFilter,
+                )
+            }
+            if (showStats) {
+                Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
+                Text(
+                    "记录是给未来的线索，不是给现在的评分。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                insights.forEach { insight ->
+                    SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(insight.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(insight.description, style = MaterialTheme.typography.titleMedium)
+                            Text("来自 ${insight.evidenceCount} 条记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
-        }
-
-        val timelineTitle = if (showStats) "决策时间线" else when (val filter = selectedFilter) {
-            DecisionFilter.All -> "全部记录"
-            is DecisionFilter.Preset -> "${filter.period.label()}的决定"
-            is DecisionFilter.Custom -> "指定范围内的决定"
-        }
-        SectionHeader(timelineTitle)
-        if (timelineDecisions.isEmpty()) {
-            EmptyJournalState(
-                if (showStats || selectedFilter == DecisionFilter.All) "还没有记录，先写下一个决定吧。" else "这个时间范围还没有决定。",
-                if (showStats || selectedFilter == DecisionFilter.All) "记录一个决定" else "清除筛选",
-                if (showStats || selectedFilter == DecisionFilter.All) onCreate else vm::clearFilter,
-            )
-        } else {
-            val displayedDecisions = timelineDecisions.take(visibleDecisionCount)
-            TimelineContainer(displayedDecisions, now, onOpen)
-            if (displayedDecisions.size < timelineDecisions.size) {
-                Text(
-                    "继续滑动加载更多 · 还剩 ${timelineDecisions.size - displayedDecisions.size} 条",
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
+            SectionHeader(timelineTitle)
+            if (timelineDecisions.isEmpty()) {
+                EmptyJournalState(
+                    if (showStats || selectedFilter == DecisionFilter.All) "还没有记录，先写下一个决定吧。" else "这个时间范围还没有决定。",
+                    if (showStats || selectedFilter == DecisionFilter.All) "记录一个决定" else "清除筛选",
+                    if (showStats || selectedFilter == DecisionFilter.All) onCreate else vm::clearFilter,
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        itemsIndexed(timelineDecisions, key = { _, decision -> decision.id }) { index, decision ->
+            TimelineItem(
+                decision = decision,
+                now = now,
+                isFirst = index == 0,
+                isLast = index == timelineDecisions.lastIndex,
+                onOpen = onOpen,
+            )
+        }
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
@@ -295,21 +276,6 @@ private fun SmallInsightCard(title: String, value: String, icon: androidx.compos
 }
 
 @Composable
-private fun TimelineContainer(decisions: List<Decision>, now: Long, onOpen: (Long) -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        decisions.forEachIndexed { index, decision ->
-            TimelineItem(
-                decision = decision,
-                now = now,
-                isFirst = index == 0,
-                isLast = index == decisions.lastIndex,
-                onOpen = onOpen,
-            )
-        }
-    }
-}
-
-@Composable
 private fun TimelineItem(
     decision: Decision,
     now: Long,
@@ -317,8 +283,8 @@ private fun TimelineItem(
     isLast: Boolean,
     onOpen: (Long) -> Unit,
 ) {
-    val due = decision.reviewDate != null && decision.reviewDate <= now && decision.status.name != "REVIEWED"
-    val reviewed = decision.status.name == "REVIEWED"
+    val due = decision.reviewDate != null && decision.reviewDate <= now && decision.status != DecisionStatus.REVIEWED
+    val reviewed = decision.status == DecisionStatus.REVIEWED
     val statusText = when {
         due -> "待复盘"
         reviewed -> "已回看"

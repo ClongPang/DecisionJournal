@@ -28,8 +28,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.data.model.Review
+import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.DetailViewModel
 import com.example.decisionjournal.ui.components.JournalTopBar
+import com.example.decisionjournal.ui.components.JournalErrorText
 import com.example.decisionjournal.ui.components.SectionHeader
 import com.example.decisionjournal.ui.components.SoftSurfaceCard
 import com.example.decisionjournal.ui.components.StatusPill
@@ -46,6 +48,7 @@ private val detailDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 @Composable
 fun DecisionDetailScreen(
     id: Long,
+    reminderWarning: Boolean = false,
     onReview: () -> Unit,
     onEdit: () -> Unit,
     onBack: () -> Unit,
@@ -54,6 +57,8 @@ fun DecisionDetailScreen(
     val decision by vm.decision(id).collectAsStateWithLifecycle(null)
     val choices by vm.choices(id).collectAsStateWithLifecycle(emptyList())
     val reviews by vm.reviews(id).collectAsStateWithLifecycle(emptyList())
+    val now by vm.now.collectAsStateWithLifecycle()
+    var showReminderWarning by remember(reminderWarning) { mutableStateOf(reminderWarning) }
     var confirmDelete by remember { mutableStateOf(false) }
 
     Column(
@@ -68,9 +73,32 @@ fun DecisionDetailScreen(
             Text("本地记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         })
 
+        if (showReminderWarning || vm.reminderError != null) {
+            SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.errorContainer) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(vm.reminderError ?: "内容已保存，但复盘提醒未安排。", color = MaterialTheme.colorScheme.onErrorContainer)
+                    Button(
+                        onClick = { vm.retryReminder(id) { showReminderWarning = false } },
+                        enabled = !vm.reminderRetrying,
+                    ) { Text(if (vm.reminderRetrying) "安排中…" else "重新安排提醒") }
+                }
+            }
+        }
+        vm.deleteError?.let { JournalErrorText(it) }
+
+        if (decision == null) {
+            SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("找不到这条决定", style = MaterialTheme.typography.titleMedium)
+                    Text("它可能已被删除，或链接已经失效。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = onBack) { Text("返回") }
+                }
+            }
+        }
+
         decision?.let { d ->
-            val reviewed = d.status.name == "REVIEWED"
-            val due = !reviewed && d.reviewDate != null && d.reviewDate <= System.currentTimeMillis()
+            val reviewed = d.status == DecisionStatus.REVIEWED
+            val due = !reviewed && d.reviewDate != null && d.reviewDate <= now
             val statusText = when {
                 reviewed -> "已回看"
                 due -> "待复盘"
@@ -163,7 +191,7 @@ fun DecisionDetailScreen(
         onDismissRequest = { confirmDelete = false },
         title = { Text("删除决定？") },
         text = { Text("关联的候选选项和复盘也会被删除。") },
-        confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete(id, onBack) }) { Text("删除") } },
+        confirmButton = { TextButton(enabled = !vm.deleting, onClick = { confirmDelete = false; vm.delete(id, onBack) }) { Text(if (vm.deleting) "删除中…" else "删除") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
     )
 }

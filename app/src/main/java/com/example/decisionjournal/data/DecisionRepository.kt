@@ -7,6 +7,8 @@ import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.ExpectationMatch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import javax.inject.Inject
 
 data class ChoiceInput(val text: String, val benefits: List<String> = emptyList(), val concerns: List<String> = emptyList())
@@ -35,6 +37,7 @@ data class ReviewInput(
     val nextTimeNote: String? = null,
 )
 data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
+data class SaveOutcome(val id: Long, val reminderWarning: String? = null)
 
 class DecisionRepository @Inject constructor(
     private val dao: DecisionDao,
@@ -42,17 +45,20 @@ class DecisionRepository @Inject constructor(
 ) {
     val decisions = dao.observeAll()
     fun due(now: Long = System.currentTimeMillis()) = dao.observeDue(now)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun due(clock: Flow<Long>): Flow<List<Decision>> = clock.flatMapLatest { dao.observeDue(it) }
     fun observe(id: Long): Flow<Decision?> = dao.observeById(id)
     fun editor(id: Long): Flow<DecisionEditorData?> = combine(dao.observeById(id), dao.observeChoices(id)) { decision, choices ->
         decision?.let { DecisionEditorData(it, choices) }
     }
     fun choices(id: Long) = dao.observeChoices(id)
     fun reviews(id: Long) = dao.observeReviews(id)
-    suspend fun save(input: DecisionInput): Result<Long> = runCatching {
+    suspend fun save(input: DecisionInput): Result<SaveOutcome> = runCatching {
         val validationError = DecisionValidation.validate(input)
         require(validationError == null) { validationError ?: "决策内容无效" }
         val cleanChoices = DecisionValidation.cleanChoices(input.choices)
         val previous = if (input.id == 0L) null else dao.getById(input.id)
+        require(input.id == 0L || previous != null) { "这条决定不存在或已被删除" }
         val now = System.currentTimeMillis()
         val decision = Decision(
             id = input.id,
@@ -70,11 +76,13 @@ class DecisionRepository @Inject constructor(
             status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
             selectedChoiceId = input.selectedChoiceIndex?.toLong(),
         )
-        val id = dao.save(decision, cleanChoices.map { Choice(decisionId = input.id, text = it.text, benefits = it.benefits, concerns = it.concerns) })
-        reminderScheduler.scheduleOrCancel(id, input.reviewDate)
-        id
+        val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
+        val warning = runCatching { reminderScheduler.scheduleOrCancel(id, input.reviewDate) }
+            .exceptionOrNull()
+            ?.let { "内容已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
+        SaveOutcome(id, warning)
     }
-    suspend fun review(input: ReviewInput): Result<Long> = runCatching {
+    suspend fun review(input: ReviewInput): Result<SaveOutcome> = runCatching {
         val validationError = ReviewValidation.validate(input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
         require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
@@ -91,8 +99,15 @@ class DecisionRepository @Inject constructor(
             input.nextReviewDate,
             System.currentTimeMillis(),
         )
-        reminderScheduler.scheduleOrCancel(input.decisionId, input.nextReviewDate)
-        id
+        val warning = runCatching { reminderScheduler.scheduleOrCancel(input.decisionId, input.nextReviewDate) }
+            .exceptionOrNull()
+            ?.let { "复盘已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
+        SaveOutcome(id, warning)
+    }
+
+    suspend fun retryReminder(decisionId: Long): Result<Unit> = runCatching {
+        val decision = dao.getById(decisionId) ?: error("这条决定不存在或已被删除")
+        reminderScheduler.scheduleOrCancel(decisionId, decision.reviewDate)
     }
     suspend fun delete(id: Long) {
         reminderScheduler.cancel(id)

@@ -13,6 +13,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,5 +89,37 @@ class DecisionDaoTest {
         assertEquals(null, saved?.reviewDate)
         assertEquals(DecisionStatus.REVIEWED, saved?.status)
         assertEquals(listOf("最终结果"), dao.observeReviews(id).first().map { it.result })
+    }
+
+    @Test
+    fun updatingMissingDecisionDoesNotCreateOrphanChoices() = runBlocking {
+        try {
+            dao.save(Decision(id = 999L, question = "不存在"), listOf(Choice(0, 0, "孤儿")))
+            fail("缺失的决定 ID 应拒绝更新")
+        } catch (_: IllegalStateException) {
+            assertEquals(emptyList<Choice>(), dao.observeChoices(999L).first())
+        }
+    }
+
+    @Test
+    fun reviewForMissingDecisionDoesNotInsertReview() = runBlocking {
+        try {
+            dao.saveReview(Review(decisionId = 999L, result = "孤儿复盘"), null, 1_000L)
+            fail("缺失的决定 ID 应拒绝复盘")
+        } catch (_: IllegalStateException) {
+            assertEquals(emptyList<Review>(), dao.observeReviews(999L).first())
+        }
+    }
+
+    @Test
+    fun childTablesHaveDecisionIndexes() = runBlocking {
+        val choicesIndex = database.openHelper.readableDatabase.query("PRAGMA index_list(choices)").use { cursor ->
+            generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }.toList()
+        }
+        val reviewsIndex = database.openHelper.readableDatabase.query("PRAGMA index_list(reviews)").use { cursor ->
+            generateSequence { if (cursor.moveToNext()) cursor.getString(cursor.getColumnIndexOrThrow("name")) else null }.toList()
+        }
+        assertTrue(choicesIndex.contains("index_choices_decisionId"))
+        assertTrue(reviewsIndex.contains("index_reviews_decisionId"))
     }
 }

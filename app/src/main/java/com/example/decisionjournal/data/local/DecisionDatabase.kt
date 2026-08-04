@@ -9,7 +9,7 @@ import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
 
-@Database(entities = [Decision::class, Choice::class, Review::class], version = 5, exportSchema = false)
+@Database(entities = [Decision::class, Choice::class, Review::class], version = 7, exportSchema = true)
 @TypeConverters(DecisionConverters::class)
 abstract class DecisionDatabase : RoomDatabase() {
     abstract fun decisionDao(): DecisionDao
@@ -38,6 +38,20 @@ abstract class DecisionDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE decisions ADD COLUMN decisionDate INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE decisions SET decisionDate = createdAt WHERE decisionDate = 0")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_choices_decisionId ON choices(decisionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_reviews_decisionId ON reviews(decisionId)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_decisions_decisionDate ON decisions(decisionDate)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_decisions_reviewDate_status ON decisions(reviewDate, status)")
             }
         }
     }

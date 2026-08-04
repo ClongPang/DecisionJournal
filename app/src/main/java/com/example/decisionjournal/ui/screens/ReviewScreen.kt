@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.ReviewInput
+import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.ui.ReviewViewModel
 import com.example.decisionjournal.ui.SaveState
@@ -51,7 +52,7 @@ import java.time.format.DateTimeFormatter
 private val reviewDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 
 @Composable
-fun ReviewScreen(decisionId: Long, onDone: () -> Unit, onBack: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
+fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
     var result by remember { mutableStateOf("") }
     var satisfaction by remember { mutableStateOf("") }
     var nextReviewDate by remember { mutableStateOf<Long?>(null) }
@@ -77,7 +78,7 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, onBack: () -> Unit, vm: R
             date.year,
             date.monthValue - 1,
             date.dayOfMonth,
-        ).apply { datePicker.minDate = System.currentTimeMillis() - 86_400_000L }.show()
+        ).apply { datePicker.minDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.show()
     }
     fun requestBack() {
         if (hasUnsavedChanges && vm.saveState != SaveState.Saving) confirmExit = true else onBack()
@@ -108,6 +109,9 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, onBack: () -> Unit, vm: R
                     }
                 }
             }
+        }
+        if (decision == null) {
+            JournalErrorText("这条决定不存在或已被删除，无法记录复盘。")
         }
         SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistSand, hero = true) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -177,7 +181,7 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, onBack: () -> Unit, vm: R
         PrimaryActionButton(
             if (vm.saveState == SaveState.Saving) "保存中…" else "保存复盘",
             onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
-            enabled = vm.saveState != SaveState.Saving && result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
+            enabled = vm.saveState != SaveState.Saving && decision != null && result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
     if (confirmExit) AlertDialog(

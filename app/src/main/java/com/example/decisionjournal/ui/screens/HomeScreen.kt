@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.HomeViewModel
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.PrimaryActionButton
@@ -57,7 +58,7 @@ fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel =
             }
             recent != null -> {
                 Text("最近的决定", style = MaterialTheme.typography.titleMedium)
-                DecisionCard(recent, if (recent.status.name == "REVIEWED") "已回看" else "等待回看", onOpen)
+                DecisionCard(recent, if (recent.status == DecisionStatus.REVIEWED) "已回看" else "等待回看", onOpen)
             }
             else -> Text("今天没有待复盘的决定。\n先把此刻的想法留下来。", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -91,7 +92,15 @@ private fun DecisionCard(decision: Decision, status: String, onOpen: (Long) -> U
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Text(if (status == "待复盘") "还有时间，记得回来看看" else "这段记录已经被回看", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        when (status) {
+                            "待复盘" -> "现在就可以回来记录结果"
+                            "等待回看" -> "还有时间，记得回来看看"
+                            else -> "这段记录已经被回看"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             }
             StatusPill(status, if (status == "待复盘") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer)

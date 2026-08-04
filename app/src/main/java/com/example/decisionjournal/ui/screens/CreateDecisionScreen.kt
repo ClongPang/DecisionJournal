@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.example.decisionjournal.data.ChoiceInput
 import com.example.decisionjournal.data.DecisionInput
+import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.ui.CreateDecisionViewModel
 import com.example.decisionjournal.ui.SaveState
 import com.example.decisionjournal.ui.components.JournalErrorText
@@ -63,7 +64,7 @@ private val createDate = DateTimeFormatter.ofPattern("yyyy年M月d日")
 private fun lines(value: String): List<String> = value.split(',', '，', '\n').map(String::trim).filter(String::isNotEmpty)
 
 @Composable
-fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
+fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
     val editor by (decisionId?.let { vm.editor(it) } ?: flowOf(null)).collectAsStateWithLifecycle(null)
     var step by remember { mutableStateOf(0) }
     var question by remember { mutableStateOf("") }
@@ -161,9 +162,28 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
             else -> editingChoiceIndex
         }
     }
+    fun moveChoice(index: Int, offset: Int) {
+        val target = index + offset
+        if (target !in choices.indices) return
+        choices = choices.toMutableList().also { list ->
+            val moved = list.removeAt(index)
+            list.add(target, moved)
+        }
+        selected = when (selected) {
+            index -> target
+            target -> index
+            else -> selected
+        }
+        editingChoiceIndex = when (editingChoiceIndex) {
+            index -> target
+            target -> index
+            else -> editingChoiceIndex
+        }
+        hasUnsavedChanges = true
+    }
     fun showDatePicker() {
         val date = reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now().plusDays(7)
-        DatePickerDialog(context, { _, year, month, day -> reviewDate = LocalDate.of(year, month + 1, day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }, date.year, date.monthValue - 1, date.dayOfMonth).apply { datePicker.minDate = System.currentTimeMillis() - 86_400_000L }.show()
+        DatePickerDialog(context, { _, year, month, day -> reviewDate = LocalDate.of(year, month + 1, day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }, date.year, date.monthValue - 1, date.dayOfMonth).apply { datePicker.minDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.show()
     }
     fun showDecisionDatePicker() {
         val date = Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -244,6 +264,8 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
                             }
                             Text("利好 ${choice.benefits.size} · 担忧 ${choice.concerns.size}", modifier = Modifier.padding(start = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(enabled = index > 0, onClick = { moveChoice(index, -1) }) { Text("上移") }
+                                TextButton(enabled = index < choices.lastIndex, onClick = { moveChoice(index, 1) }) { Text("下移") }
                                 TextButton(onClick = { editChoice(index) }) { Text("编辑") }
                                 TextButton(onClick = { deleteChoice(index) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
                             }

@@ -99,8 +99,21 @@ class JournalStatsTest {
 
         val insights = calculateSelfInsights(decisions)
 
-        assertEquals(listOf("你最近反复在意", "你经常担心"), insights.map { it.title })
+        assertEquals(listOf("你反复在意", "你经常担心"), insights.map { it.title })
         assertEquals(3, insights.first().evidenceCount)
+    }
+
+    @Test
+    fun selfInsightsCountDistinctDecisionsNotRepeatedLines() {
+        val decisions = listOf(
+            Decision(question = "一", benefits = listOf("成长", "成长")),
+            Decision(question = "二", benefits = listOf("成长")),
+            Decision(question = "三", benefits = listOf("生活")),
+        )
+
+        val insights = calculateSelfInsights(decisions, minimumEvidence = 2)
+
+        assertEquals(2, insights.single().evidenceCount)
     }
 
     @Test

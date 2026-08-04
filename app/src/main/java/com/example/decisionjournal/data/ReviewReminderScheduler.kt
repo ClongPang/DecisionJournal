@@ -31,6 +31,12 @@ class ReviewReminderScheduler @Inject constructor(@ApplicationContext private va
         val name = WORK_PREFIX + decisionId
         workManager.cancelUniqueWork(name)
         if (reviewDate == null || reviewDate <= System.currentTimeMillis()) return
+        if (android.os.Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            throw IllegalStateException("通知权限未开启")
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            throw IllegalStateException("通知已被系统关闭")
+        }
         val request = OneTimeWorkRequestBuilder<ReviewReminderWorker>()
             .setInitialDelay(reviewDate - System.currentTimeMillis(), TimeUnit.MILLISECONDS)
             .setInputData(Data.Builder().putLong(DECISION_ID, decisionId).build())

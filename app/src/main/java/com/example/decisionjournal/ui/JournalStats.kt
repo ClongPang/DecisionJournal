@@ -1,6 +1,7 @@
 package com.example.decisionjournal.ui
 
 import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.DecisionStatus
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -101,8 +102,8 @@ fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats 
         ?.key
 
     return DecisionStats(
-        completedCount = decisions.count { it.status.name == "REVIEWED" },
-        dueCount = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status.name != "REVIEWED" },
+        completedCount = decisions.count { it.status == DecisionStatus.REVIEWED },
+        dueCount = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED },
         mostCaredAbout = caredAbout,
     )
 }
@@ -111,19 +112,24 @@ fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats 
  * 只生成可追溯的描述性观察；记录不足时不强行给用户下结论。
  */
 fun calculateSelfInsights(decisions: List<Decision>, minimumEvidence: Int = 3): List<SelfInsight> {
-    fun frequency(values: List<String>): Pair<String, Int>? = values
-        .map(String::trim)
-        .filter(String::isNotEmpty)
-        .groupingBy { it }
+    fun frequency(values: (Decision) -> List<String>): Pair<String, Int>? = decisions
+        .flatMapIndexed { index, decision ->
+            values(decision)
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .distinct()
+                .map { it to index }
+        }
+        .groupingBy { it.first }
         .eachCount()
         .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
         ?.let { it.key to it.value }
 
-    val cared = frequency(decisions.flatMap { it.benefits })
-    val concerns = frequency(decisions.flatMap { it.concerns })
+    val cared = frequency { it.benefits }
+    val concerns = frequency { it.concerns }
     return buildList {
         if (cared != null && cared.second >= minimumEvidence) {
-            add(SelfInsight("你最近反复在意", cared.first, cared.second))
+            add(SelfInsight("你反复在意", cared.first, cared.second))
         }
         if (concerns != null && concerns.second >= minimumEvidence) {
             add(SelfInsight("你经常担心", concerns.first, concerns.second))

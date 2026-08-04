@@ -1,9 +1,13 @@
 package com.example.decisionjournal.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "reviews")
+@Entity(
+    tableName = "reviews",
+    indices = [Index(value = ["decisionId"])],
+)
 data class Review(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val decisionId: Long,
