@@ -209,7 +209,10 @@ class DemoDataSeeder @Inject constructor(
             val days = (index * 7L) % 365L
             val topic = topics[index % topics.size]
             val decision = Decision(
-                question = "预热${(index + 1).toString().padStart(2, '0')}：${topic.first}",
+                // The warmup mechanism must never leak implementation labels into the UI.
+                // Repeated questions are intentional: they model real recurring decisions
+                // across different dates without making a test fixture visible to the user.
+                question = topic.first,
                 context = topic.second.first,
                 benefits = listOf(topic.second.second[0], topic.second.second[1]),
                 concerns = listOf("执行成本", if (index % 2 == 0) "不确定" else "生活平衡"),

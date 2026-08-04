@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
@@ -149,8 +150,12 @@ fun MyDecisionsScreen(
         is DecisionFilter.Preset -> "${filter.period.label()}的决定"
         is DecisionFilter.Custom -> "指定范围内的决定"
     }
+    // These are two distinct tab experiences.  Keeping a list state per mode prevents
+    // the archive from opening midway down the decisions timeline after tab switching.
+    val listState = remember(showStats) { LazyListState() }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
     ) {
