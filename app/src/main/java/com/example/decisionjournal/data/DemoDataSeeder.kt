@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.first
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -252,7 +253,14 @@ class DemoDataSeeder @Inject constructor(
 
     private suspend fun seedActive(decision: Decision, choices: List<Choice>, selectedIndex: Int? = null) {
         val id = dao.save(decision.copy(status = DecisionStatus.ACTIVE, selectedChoiceId = selectedIndex?.toLong()), choices)
-        reminderScheduler.scheduleOrCancel(id, decision.reviewDate)
+        // Demo data must remain usable when notification permission is denied or blocked.
+        try {
+            reminderScheduler.scheduleOrCancel(id, decision.reviewDate)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Notifications are optional for debug warmup data.
+        }
     }
 
     private suspend fun seedReviewed(decision: Decision, choices: List<Choice>, reviews: List<Review>) {

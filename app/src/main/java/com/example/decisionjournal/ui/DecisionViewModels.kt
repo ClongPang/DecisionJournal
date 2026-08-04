@@ -20,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -119,9 +120,14 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
     fun delete(id: Long, done: () -> Unit) = viewModelScope.launch {
         deleting = true
         deleteError = null
-        runCatching { repo.delete(id) }
-            .onSuccess { done() }
-            .onFailure { deleteError = it.message ?: "删除失败，请稍后重试" }
+        try {
+            repo.delete(id)
+            done()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            deleteError = error.message ?: "删除失败，请稍后重试"
+        }
         deleting = false
     }
     fun retryReminder(id: Long, done: () -> Unit = {}) = viewModelScope.launch {

@@ -89,4 +89,19 @@ class ValidationTest {
         assertEquals(DecisionStatus.REVIEWED, DecisionStatusRules.afterReview(null))
         assertEquals(DecisionStatus.ACTIVE, DecisionStatusRules.afterReview(200L))
     }
+
+    @Test
+    fun changedReviewDateCannotBeBeforeTodayButExistingDueDateCanBeRetained() {
+        val today = 1_000L
+        assertEquals("复盘日期不能早于今天", DecisionValidation.validateReviewDate(null, 999L, today))
+        assertNull(DecisionValidation.validateReviewDate(999L, 999L, today))
+        assertNull(DecisionValidation.validateReviewDate(999L, 1_000L, today))
+    }
+
+    @Test
+    fun nextReviewDateCannotBeBeforeToday() {
+        val input = ReviewInput(decisionId = 1L, result = "结果", satisfaction = null, nextReviewDate = 999L)
+        assertEquals("下一次复盘日期不能早于今天", ReviewValidation.validate(input, todayStart = 1_000L))
+        assertNull(ReviewValidation.validate(input.copy(nextReviewDate = 1_000L), todayStart = 1_000L))
+    }
 }

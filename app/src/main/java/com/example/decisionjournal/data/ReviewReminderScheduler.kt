@@ -35,8 +35,13 @@ class ReviewReminderScheduler @Inject constructor(@ApplicationContext private va
         if (android.os.Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             throw IllegalStateException("通知权限未开启")
         }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "复盘提醒", NotificationManager.IMPORTANCE_DEFAULT))
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             throw IllegalStateException("通知已被系统关闭")
+        }
+        if (manager.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            throw IllegalStateException("复盘提醒频道已被关闭")
         }
         val request = OneTimeWorkRequestBuilder<ReviewReminderWorker>()
             .setInitialDelay(reviewDate - System.currentTimeMillis(), TimeUnit.MILLISECONDS)
@@ -50,26 +55,38 @@ class ReviewReminderScheduler @Inject constructor(@ApplicationContext private va
 
 class ReviewReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "复盘提醒", NotificationManager.IMPORTANCE_DEFAULT))
+        val decisionId = inputData.getLong(DECISION_ID, 0L)
+        if (decisionId <= 0L) return Result.failure()
         if (android.os.Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return Result.success()
-        val id = inputData.getLong(DECISION_ID, 0L).toInt()
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("回看提醒")
-            .setContentText("有一个决定到了复盘时间")
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    applicationContext,
-                    id,
-                Intent(applicationContext, MainActivity::class.java).putExtra(EXTRA_REMINDER_DECISION_ID, inputData.getLong(DECISION_ID, 0L)),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                ),
-            )
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        NotificationManagerCompat.from(applicationContext).notify(id, notification)
-        return Result.success()
+        val notifications = NotificationManagerCompat.from(applicationContext)
+        if (!notifications.areNotificationsEnabled()) return Result.success()
+
+        return try {
+            val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "复盘提醒", NotificationManager.IMPORTANCE_DEFAULT))
+            if (manager.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) return Result.success()
+            val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("回看提醒")
+                .setContentText("有一个决定到了复盘时间")
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        applicationContext,
+                        decisionId.hashCode(),
+                        Intent(applicationContext, MainActivity::class.java).putExtra(EXTRA_REMINDER_DECISION_ID, decisionId),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+            notifications.notify(decisionId.hashCode(), notification)
+            Result.success()
+        } catch (_: SecurityException) {
+            // Permission or channel state can change after WorkManager starts the worker.
+            Result.success()
+        } catch (_: Exception) {
+            Result.retry()
+        }
     }
 }

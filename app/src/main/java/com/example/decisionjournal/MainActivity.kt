@@ -9,6 +9,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import com.example.decisionjournal.data.DemoDataSeeder
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 import com.example.decisionjournal.BuildConfig
 import com.example.decisionjournal.ui.DecisionJournalApp
 
@@ -24,7 +25,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (BuildConfig.DEBUG) {
-            lifecycleScope.launch { demoDataSeeder.seedIfNeeded() }
+            lifecycleScope.launch {
+                try {
+                    demoDataSeeder.seedIfNeeded()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Debug-only warmup data must never prevent the app from opening.
+                }
+            }
         }
         val initialDecisionId = intent.getLongExtra(EXTRA_REMINDER_DECISION_ID, 0L).takeIf { it > 0L }
         setContent {

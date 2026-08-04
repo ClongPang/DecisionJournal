@@ -181,7 +181,7 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
         PrimaryActionButton(
             if (vm.saveState == SaveState.Saving) "保存中…" else "保存复盘",
             onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
-            enabled = vm.saveState != SaveState.Saving && decision != null && result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
+            enabled = vm.saveState != SaveState.Saving && decision != null && result.trim().isNotEmpty() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
     if (confirmExit) AlertDialog(

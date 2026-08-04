@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 
 data class ChoiceInput(val text: String, val benefits: List<String> = emptyList(), val concerns: List<String> = emptyList())
@@ -39,6 +40,14 @@ data class ReviewInput(
 data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
 data class SaveOutcome(val id: Long, val reminderWarning: String? = null)
 
+private suspend fun <T> capture(block: suspend () -> T): Result<T> = try {
+    Result.success(block())
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (error: Exception) {
+    Result.failure(error)
+}
+
 class DecisionRepository @Inject constructor(
     private val dao: DecisionDao,
     private val reminderScheduler: ReviewReminderScheduler,
@@ -53,12 +62,15 @@ class DecisionRepository @Inject constructor(
     }
     fun choices(id: Long) = dao.observeChoices(id)
     fun reviews(id: Long) = dao.observeReviews(id)
-    suspend fun save(input: DecisionInput): Result<SaveOutcome> = runCatching {
+    suspend fun save(input: DecisionInput): Result<SaveOutcome> = capture {
         val validationError = DecisionValidation.validate(input)
         require(validationError == null) { validationError ?: "决策内容无效" }
         val cleanChoices = DecisionValidation.cleanChoices(input.choices)
         val previous = if (input.id == 0L) null else dao.getById(input.id)
         require(input.id == 0L || previous != null) { "这条决定不存在或已被删除" }
+        require(DecisionValidation.validateReviewDate(previous?.reviewDate, input.reviewDate) == null) {
+            "复盘日期不能早于今天"
+        }
         val now = System.currentTimeMillis()
         val decision = Decision(
             id = input.id,
@@ -77,12 +89,12 @@ class DecisionRepository @Inject constructor(
             selectedChoiceId = input.selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
-        val warning = runCatching { reminderScheduler.scheduleOrCancel(id, input.reviewDate) }
+        val warning = capture { reminderScheduler.scheduleOrCancel(id, input.reviewDate) }
             .exceptionOrNull()
             ?.let { "内容已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
         SaveOutcome(id, warning)
     }
-    suspend fun review(input: ReviewInput): Result<SaveOutcome> = runCatching {
+    suspend fun review(input: ReviewInput): Result<SaveOutcome> = capture {
         val validationError = ReviewValidation.validate(input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
         require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
@@ -99,18 +111,25 @@ class DecisionRepository @Inject constructor(
             input.nextReviewDate,
             System.currentTimeMillis(),
         )
-        val warning = runCatching { reminderScheduler.scheduleOrCancel(input.decisionId, input.nextReviewDate) }
+        val warning = capture { reminderScheduler.scheduleOrCancel(input.decisionId, input.nextReviewDate) }
             .exceptionOrNull()
             ?.let { "复盘已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
         SaveOutcome(id, warning)
     }
 
-    suspend fun retryReminder(decisionId: Long): Result<Unit> = runCatching {
+    suspend fun retryReminder(decisionId: Long): Result<Unit> = capture {
         val decision = dao.getById(decisionId) ?: error("这条决定不存在或已被删除")
         reminderScheduler.scheduleOrCancel(decisionId, decision.reviewDate)
     }
     suspend fun delete(id: Long) {
-        reminderScheduler.cancel(id)
+        // A scheduler failure must not leave the user's local record undeletable.
+        try {
+            reminderScheduler.cancel(id)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // The database remains the source of truth for deletion.
+        }
         dao.deleteCascade(id)
     }
 }
