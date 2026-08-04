@@ -318,7 +318,7 @@ private fun TimelineItem(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(decision.question, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            Instant.ofEpochMilli(decision.updatedAt).atZone(ZoneId.systemDefault()).toLocalDate().format(timelineDate),
+                            Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(timelineDate),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodyMedium,
                         )

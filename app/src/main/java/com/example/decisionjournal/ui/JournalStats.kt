@@ -70,13 +70,13 @@ fun filterDecisions(decisions: List<Decision>, filter: DecisionFilter, date: Loc
     }
     return decisions
         .asSequence()
-        .filter { range == null || it.createdAt in range.startInclusive until range.endExclusive }
-        .sortedWith(compareByDescending<Decision> { it.createdAt }.thenByDescending { it.id })
+        .filter { range == null || it.decisionDate in range.startInclusive until range.endExclusive }
+        .sortedWith(compareByDescending<Decision> { it.decisionDate }.thenByDescending { it.id })
         .toList()
 }
 
 private fun countCreatedInRange(decisions: List<Decision>, range: DateTimeRange): Int =
-    decisions.count { it.createdAt in range.startInclusive until range.endExclusive }
+    decisions.count { it.decisionDate in range.startInclusive until range.endExclusive }
 
 private fun rangeBetween(start: LocalDate, endExclusive: LocalDate, zone: ZoneId): DateTimeRange =
     DateTimeRange(

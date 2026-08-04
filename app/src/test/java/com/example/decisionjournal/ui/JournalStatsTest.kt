@@ -11,6 +11,16 @@ class JournalStatsTest {
     private val zone = ZoneId.of("Asia/Shanghai")
 
     @Test
+    fun decisionDateDefaultsToCreatedAtButCanBeCustomized() {
+        val createdAt = LocalDate.of(2026, 8, 5).atStartOfDay(zone).toInstant().toEpochMilli()
+        val defaultDecision = Decision(question = "默认日期", createdAt = createdAt)
+        val customDecision = Decision(question = "自定义日期", createdAt = createdAt, decisionDate = createdAt - 86_400_000L)
+
+        assertEquals(createdAt, defaultDecision.decisionDate)
+        assertEquals(createdAt - 86_400_000L, customDecision.decisionDate)
+    }
+
+    @Test
     fun periodCountsUseCreatedAtAndNaturalCalendarBoundaries() {
         val date = LocalDate.of(2026, 8, 5)
         fun at(day: LocalDate, hour: Int = 12): Long = day.atTime(hour, 0).atZone(zone).toInstant().toEpochMilli()

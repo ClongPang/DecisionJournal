@@ -15,6 +15,7 @@ data class Decision(
     val confidence: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
+    val decisionDate: Long = createdAt,
     val reviewDate: Long? = null,
     val status: DecisionStatus = DecisionStatus.ACTIVE,
     val selectedChoiceId: Long? = null,

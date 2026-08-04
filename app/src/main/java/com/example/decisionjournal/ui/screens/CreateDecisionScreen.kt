@@ -72,6 +72,7 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
     var editingChoiceIndex by remember { mutableStateOf<Int?>(null) }
     var choices by remember { mutableStateOf(listOf<ChoiceInput>()) }
     var selected by remember { mutableStateOf<Int?>(null) }
+    var decisionDate by remember { mutableStateOf(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()) }
     var reviewDate by remember { mutableStateOf<Long?>(null) }
     var initialized by remember { mutableStateOf(false) }
     var pendingInput by remember { mutableStateOf<DecisionInput?>(null) }
@@ -93,13 +94,14 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
             confidence = decision.confidence?.toString().orEmpty()
             choices = existingChoices.map { ChoiceInput(it.text, it.benefits, it.concerns) }
             selected = existingChoices.indexOfFirst { it.id == decision.selectedChoiceId }.takeIf { it >= 0 }
+            decisionDate = decision.decisionDate
             reviewDate = decision.reviewDate
             initialized = true
         }
     }
 
     fun save() {
-        val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull())
+        val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate)
         val needsPermission = Build.VERSION.SDK_INT >= 33 && reviewDate != null && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             pendingInput = input
@@ -128,6 +130,19 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
         val date = reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now().plusDays(7)
         DatePickerDialog(context, { _, year, month, day -> reviewDate = LocalDate.of(year, month + 1, day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }, date.year, date.monthValue - 1, date.dayOfMonth).apply { datePicker.minDate = System.currentTimeMillis() - 86_400_000L }.show()
     }
+    fun showDecisionDatePicker() {
+        val date = Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate()
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                decisionDate = LocalDate.of(year, month + 1, day)
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            },
+            date.year,
+            date.monthValue - 1,
+            date.dayOfMonth,
+        ).show()
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical), verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -144,6 +159,12 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -
                 Text("我在决定什么？", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(question, { question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
                 OutlinedTextField(contextText, { contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("决定日期", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = ::showDecisionDatePicker) {
+                        Text(Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate))
+                    }
+                }
             }
             1 -> {
                 Text("我有哪些选择？", style = MaterialTheme.typography.titleMedium)

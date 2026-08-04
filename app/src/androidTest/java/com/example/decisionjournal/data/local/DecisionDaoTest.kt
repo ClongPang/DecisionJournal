@@ -61,8 +61,8 @@ class DecisionDaoTest {
 
     @Test
     fun decisionsAreOrderedByCreatedAtNotUpdatedAt() = runBlocking {
-        dao.save(Decision(question = "旧但最近编辑", createdAt = 100L, updatedAt = 900L), emptyList())
-        dao.save(Decision(question = "新决定", createdAt = 200L, updatedAt = 200L), emptyList())
+        dao.save(Decision(question = "旧但最近编辑", createdAt = 100L, updatedAt = 900L, decisionDate = 100L), emptyList())
+        dao.save(Decision(question = "新决定", createdAt = 100L, updatedAt = 200L, decisionDate = 200L), emptyList())
 
         assertEquals(listOf("新决定", "旧但最近编辑"), dao.observeAll().first().map { it.question })
     }

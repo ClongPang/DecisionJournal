@@ -22,6 +22,7 @@ data class DecisionInput(
     val futureNote: String? = null,
     val expectedOutcome: String? = null,
     val confidence: Int? = null,
+    val decisionDate: Long = System.currentTimeMillis(),
 )
 data class ReviewInput(
     val decisionId: Long,
@@ -60,6 +61,7 @@ class DecisionRepository @Inject constructor(
             confidence = input.confidence,
             createdAt = previous?.createdAt ?: now,
             updatedAt = now,
+            decisionDate = input.decisionDate,
             reviewDate = input.reviewDate,
             status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
             selectedChoiceId = input.selectedChoiceIndex?.toLong(),

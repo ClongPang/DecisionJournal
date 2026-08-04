@@ -54,7 +54,11 @@ fun DecisionDetailScreen(
             d.context?.takeIf { it.isNotBlank() }?.let { Text(it) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 StatusPill(if (d.status.name == "REVIEWED") "已回看" else "等待回看", if (d.status.name == "REVIEWED") MistGreen else MistBlue)
-                d.reviewDate?.let { Text("复盘日：" + Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(detailDateFormatter), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                    Text("决定日：" + Instant.ofEpochMilli(d.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(detailDateFormatter), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    d.reviewDate?.let { Text("复盘日：" + Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(detailDateFormatter), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    TextButton(onClick = onEdit) { Text("修改日期") }
+                }
             }
             SectionHeader("候选选项")
             choices.forEach { choice ->

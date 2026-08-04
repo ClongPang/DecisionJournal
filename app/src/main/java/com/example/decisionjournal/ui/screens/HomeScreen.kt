@@ -79,8 +79,8 @@ private fun DecisionCard(decision: Decision, status: String, onOpen: (Long) -> U
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Rounded.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    if (status == "待复盘") "等待回看"
-                    else "$status · " + (decision.reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate) } ?: "未设置日期"),
+                    "决定于 " + Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate) +
+                        if (status == "待复盘") " · 等待回看" else " · $status",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
