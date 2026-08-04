@@ -53,13 +53,13 @@ fun DecisionJournalApp() {
             composable("mine") { MyDecisionsScreen(onOpen = { nav.navigate("detail/$it") }, onCreate = { nav.navigate("create") }, showStats = true) }
             composable("create?decisionId={decisionId}", arguments = listOf(navArgument("decisionId") { type = NavType.LongType; defaultValue = -1L })) { entry ->
                 val decisionId = entry.arguments?.getLong("decisionId")?.takeIf { it > 0L }
-                CreateDecisionScreen(decisionId = decisionId, onDone = { nav.navigate("detail/$it") { popUpTo("home") } })
+                CreateDecisionScreen(decisionId = decisionId, onDone = { nav.navigate("detail/$it") { popUpTo("home") } }, onBack = { nav.popBackStack() })
             }
             composable("detail/{id}") { entry ->
                 val id = entry.arguments?.getString("id")!!.toLong()
                 DecisionDetailScreen(id, { nav.navigate("review/$id") }, { nav.navigate("create?decisionId=$id") }, { nav.popBackStack() })
             }
-            composable("review/{id}") { entry -> ReviewScreen(entry.arguments?.getString("id")!!.toLong(), onDone = { nav.popBackStack() }) }
+            composable("review/{id}") { entry -> ReviewScreen(entry.arguments?.getString("id")!!.toLong(), onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() }) }
         }
     }
 }

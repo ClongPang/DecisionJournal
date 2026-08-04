@@ -24,7 +24,7 @@ import java.time.format.DateTimeFormatter
 private val reviewDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
 
 @Composable
-fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
+fun ReviewScreen(decisionId: Long, onDone: () -> Unit, onBack: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
     var result by remember { mutableStateOf("") }
     var satisfaction by remember { mutableStateOf("") }
     var nextReviewDate by remember { mutableStateOf<Long?>(null) }
@@ -50,6 +50,7 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hil
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical), verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing)) {
+        TextButton(onClick = onBack) { Text("‹ 返回") }
         Text("未来再看", style = MaterialTheme.typography.headlineSmall)
         Text("当时的决定，现在感觉如何？", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(value = result, onValueChange = { result = it }, modifier = Modifier.fillMaxWidth().height(180.dp), label = { Text("记录结果*") }, placeholder = { Text("事情后来怎么样了？") })
@@ -77,9 +78,9 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hil
         vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(Modifier.weight(1f))
         PrimaryActionButton(
-            "保存复盘",
+            if (vm.saveState == com.example.decisionjournal.ui.SaveState.Saving) "保存中…" else "保存复盘",
             onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
-            enabled = result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
+            enabled = vm.saveState != com.example.decisionjournal.ui.SaveState.Saving && result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
 }

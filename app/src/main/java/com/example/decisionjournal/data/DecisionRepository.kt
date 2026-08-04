@@ -44,7 +44,8 @@ class DecisionRepository @Inject constructor(
     fun choices(id: Long) = dao.observeChoices(id)
     fun reviews(id: Long) = dao.observeReviews(id)
     suspend fun save(input: DecisionInput): Result<Long> = runCatching {
-        require(DecisionValidation.validate(input) == null)
+        val validationError = DecisionValidation.validate(input)
+        require(validationError == null) { validationError ?: "决策内容无效" }
         val cleanChoices = DecisionValidation.cleanChoices(input.choices)
         val previous = if (input.id == 0L) null else dao.getById(input.id)
         val now = System.currentTimeMillis()
@@ -60,7 +61,7 @@ class DecisionRepository @Inject constructor(
             createdAt = previous?.createdAt ?: now,
             updatedAt = now,
             reviewDate = input.reviewDate,
-            status = com.example.decisionjournal.data.model.DecisionStatus.ACTIVE,
+            status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
             selectedChoiceId = input.selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = input.id, text = it.text, benefits = it.benefits, concerns = it.concerns) })
@@ -68,7 +69,8 @@ class DecisionRepository @Inject constructor(
         id
     }
     suspend fun review(input: ReviewInput): Result<Long> = runCatching {
-        require(ReviewValidation.validate(input) == null)
+        val validationError = ReviewValidation.validate(input)
+        require(validationError == null) { validationError ?: "复盘内容无效" }
         val id = dao.saveReview(
             Review(
                 decisionId = input.decisionId,

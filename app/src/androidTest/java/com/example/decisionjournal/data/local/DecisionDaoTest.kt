@@ -60,6 +60,14 @@ class DecisionDaoTest {
     }
 
     @Test
+    fun decisionsAreOrderedByCreatedAtNotUpdatedAt() = runBlocking {
+        dao.save(Decision(question = "旧但最近编辑", createdAt = 100L, updatedAt = 900L), emptyList())
+        dao.save(Decision(question = "新决定", createdAt = 200L, updatedAt = 200L), emptyList())
+
+        assertEquals(listOf("新决定", "旧但最近编辑"), dao.observeAll().first().map { it.question })
+    }
+
+    @Test
     fun reviewWithNextDateKeepsDecisionActiveAndReschedulesDate() = runBlocking {
         val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
         dao.saveReview(Review(decisionId = id, result = "第一次结果"), 2_000L, 1_000L)
