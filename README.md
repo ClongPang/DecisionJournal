@@ -1,5 +1,7 @@
 # 回看 · Decision Journal
 
+记录决策，总结决策，复盘决策，甚至是辅助决策。
+
 Android 原生项目骨架，基于 `Kotlin + Jetpack Compose + Material 3 + Room`，当前使用 Android SDK 37、AGP 9.3.0、Gradle 9.6.1 和 AGP 内置 Kotlin。
 
 ## 当前包含
