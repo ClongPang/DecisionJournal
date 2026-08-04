@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -48,6 +51,7 @@ import com.example.decisionjournal.ui.theme.MistBlue
 import com.example.decisionjournal.ui.theme.MistGreen
 import com.example.decisionjournal.ui.theme.MistSand
 import com.example.decisionjournal.ui.theme.Hairline
+import com.example.decisionjournal.ui.theme.MutedTerracotta
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -100,16 +104,27 @@ fun DecisionDetailScreen(
         JournalTopBar(title = "这一次决定", onBack = onBack)
 
         if (showReminderWarning || vm.reminderError != null) {
-            SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.errorContainer) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(vm.reminderError ?: "内容已保存，但复盘提醒未安排。", color = MaterialTheme.colorScheme.onErrorContainer)
+            SoftSurfaceCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MistSand,
+                borderColor = MutedTerracotta.copy(alpha = 0.38f),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            onClick = { vm.retryReminder(id) { showReminderWarning = false } },
-                            enabled = !vm.reminderRetrying,
-                        ) { Text(if (vm.reminderRetrying) "安排中…" else "重新安排") }
-                        TextButton(onClick = ::openNotificationSettings) { Text("通知设置") }
+                        Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = MutedTerracotta)
+                        Text("提醒尚未安排", style = MaterialTheme.typography.titleMedium, color = MutedTerracotta)
                     }
+                    Text(
+                        vm.reminderError ?: "内容已保存，但复盘提醒未安排。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { vm.retryReminder(id) { showReminderWarning = false } },
+                        enabled = !vm.reminderRetrying,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (vm.reminderRetrying) "正在安排…" else "重新安排提醒") }
+                    TextButton(onClick = ::openNotificationSettings) { Text("打开通知设置") }
                 }
             }
         }
@@ -250,7 +265,7 @@ private fun DecisionStatePage(title: String, message: String, onBack: () -> Unit
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (missing) "找不到这条决定" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (missing) TextButton(onClick = onBack) { Text("返回") }
+                if (missing) TextButton(onClick = onBack) { Text("回到今天") }
             }
         }
     }

@@ -157,12 +157,19 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
         return
     }
     if (decisionId != null && editorState is DecisionEditorState.Missing) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-            SoftSurfaceCard(modifier = Modifier.padding(JournalDimens.pageHorizontal)) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+            verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
+        ) {
+            JournalTopBar(title = "编辑决定", onBack = onBack)
+            SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("找不到这条决定", style = MaterialTheme.typography.titleMedium)
                     Text("它可能已被删除，无法继续编辑。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onBack) { Text("返回") }
+                    TextButton(onClick = onBack) { Text("回到今天") }
                 }
             }
         }
@@ -293,7 +300,7 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
             0 -> {
                 Text("先把问题写下来", style = MaterialTheme.typography.headlineSmall)
                 Text("把问题说清楚，不急着马上找到答案。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                JournalTextField(question, { hasUnsavedChanges = true; question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
+                JournalTextField(question, { hasUnsavedChanges = true; vm.clearError(); question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
                 JournalTextField(contextText, { hasUnsavedChanges = true; contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -310,7 +317,7 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
             1 -> {
                 Text("我会选择什么？", style = MaterialTheme.typography.headlineSmall)
                 Text("列出真实存在的可能性，再看看它们各自带来什么。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                JournalTextField(choiceText, { hasUnsavedChanges = true; choiceText = it }, Modifier.fillMaxWidth(), label = { Text("候选选项*") })
+                JournalTextField(choiceText, { hasUnsavedChanges = true; vm.clearError(); choiceText = it }, Modifier.fillMaxWidth(), label = { Text("候选选项*") })
                 JournalTextField(choiceBenefits, { hasUnsavedChanges = true; choiceBenefits = it }, Modifier.fillMaxWidth(), label = { Text("这个选项的利好（可选）") })
                 JournalTextField(choiceConcerns, { hasUnsavedChanges = true; choiceConcerns = it }, Modifier.fillMaxWidth(), label = { Text("这个选项的担忧（可选）") })
                 OutlinedButton(
@@ -347,6 +354,12 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
                             }
                         }
                     }
+                }
+                if (selected != null) {
+                    TextButton(
+                        onClick = { hasUnsavedChanges = true; selected = null },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("暂不确定最终选择") }
                 }
             }
             else -> {

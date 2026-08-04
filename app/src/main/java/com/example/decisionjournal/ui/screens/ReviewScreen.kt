@@ -168,7 +168,7 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
         Text("后来发生了什么？", style = MaterialTheme.typography.headlineSmall)
         JournalTextField(
             value = result,
-            onValueChange = { hasUnsavedChanges = true; result = it },
+            onValueChange = { hasUnsavedChanges = true; vm.clearError(); result = it },
             modifier = Modifier.fillMaxWidth().height(180.dp),
             label = { Text("记录结果*") },
             placeholder = { Text("事情后来怎么样了？") },
@@ -255,7 +255,7 @@ private fun ReviewStatePage(message: String, onBack: () -> Unit, missing: Boolea
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (missing) "无法记录复盘" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (missing) TextButton(onClick = onBack) { Text("返回") }
+                if (missing) TextButton(onClick = onBack) { Text("回到今天") }
             }
         }
     }

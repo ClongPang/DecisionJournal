@@ -141,6 +141,7 @@ fun MyDecisionsScreen(
     }
     val timelineDecisions = searchedTimelineSource.take(visibleDecisionCount)
     val insights = remember(decisions) { calculateSelfInsights(decisions) }
+    val hasDecisions = decisions.isNotEmpty()
     val timelineTitle = if (showStats) "决策时间线" else if (searchQuery.isNotBlank()) "搜索结果" else when (val filter = selectedFilter) {
         DecisionFilter.All -> "全部记录"
         DecisionFilter.Due -> "待回看的决定"
@@ -165,7 +166,7 @@ fun MyDecisionsScreen(
                     title = if (showStats) "我的档案" else "全部决定",
                     subtitle = if (showStats) "从记录里，看见自己如何选择" else "按时间回看每一次判断",
                 )
-                if (!showStats) {
+                if (!showStats && hasDecisions) {
                     PeriodOverview(
                         counts = periodCounts,
                         statusCounts = statusCounts,
@@ -186,7 +187,7 @@ fun MyDecisionsScreen(
                         maxLines = 1,
                     )
                 }
-                if (showStats) {
+                if (showStats && hasDecisions) {
                     Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
                     Text(
                         "记录是给未来的线索，不是给现在的评分。",
@@ -213,9 +214,12 @@ fun MyDecisionsScreen(
                         }
                     }
                 }
-                SectionHeader(timelineTitle)
+                SectionHeader(if (showStats && !hasDecisions) "从这里开始" else timelineTitle)
                 if (timelineDecisions.isEmpty()) {
                     val isSearching = !showStats && searchQuery.isNotBlank()
+                    val displaySearchQuery = searchQuery.trim().let { query ->
+                        if (query.length > 20) "${query.take(20)}…" else query
+                    }
                     val emptyAction: () -> Unit = when {
                         isSearching -> { { searchQuery = "" } }
                         showStats || selectedFilter == DecisionFilter.All -> onCreate
@@ -223,8 +227,9 @@ fun MyDecisionsScreen(
                     }
                     EmptyJournalState(
                         when {
-                            isSearching -> "没有找到包含“${searchQuery.trim()}”的决定。"
-                            showStats || selectedFilter == DecisionFilter.All -> "还没有记录，先写下一个决定吧。"
+                            isSearching -> "没有找到包含“$displaySearchQuery”的决定。"
+                            showStats && !hasDecisions -> "还没有属于你的档案，先留下第一个决定吧。"
+                            selectedFilter == DecisionFilter.All -> "还没有记录，先写下第一个决定吧。"
                             else -> "这个筛选条件下还没有决定。"
                         },
                         when {
@@ -233,6 +238,7 @@ fun MyDecisionsScreen(
                             else -> "清除筛选"
                         },
                         emptyAction,
+                        primaryAction = !isSearching && (showStats || selectedFilter == DecisionFilter.All),
                     )
                 }
             }

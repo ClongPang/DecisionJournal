@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.decisionjournal.ui.theme.JournalDimens
 import com.example.decisionjournal.ui.theme.CardWhite
@@ -203,13 +205,17 @@ fun JournalErrorText(message: String) {
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.errorContainer,
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text("需要注意", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(
+                message,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
         }
     }
 }
@@ -220,15 +226,31 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun EmptyJournalState(message: String, actionText: String, onAction: () -> Unit) {
+fun EmptyJournalState(
+    message: String,
+    actionText: String,
+    onAction: () -> Unit,
+    primaryAction: Boolean = true,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("—", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.headlineSmall)
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-        PrimaryActionButton(actionText, onAction, Modifier.fillMaxWidth(0.72f))
+        Text(
+            message,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+        if (primaryAction) {
+            PrimaryActionButton(actionText, onAction, Modifier.fillMaxWidth(0.72f))
+        } else {
+            TextButton(onClick = onAction) { Text(actionText) }
+        }
     }
 }
 

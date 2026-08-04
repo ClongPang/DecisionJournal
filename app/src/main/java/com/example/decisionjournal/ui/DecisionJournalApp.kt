@@ -41,6 +41,13 @@ import com.example.decisionjournal.ui.theme.Hairline
 @Composable
 fun DecisionJournalApp(initialDecisionId: Long? = null) {
     val nav = rememberNavController()
+    fun navigateBackOrHome() {
+        if (nav.popBackStack()) return
+        nav.navigate("home") {
+            popUpTo(nav.graph.startDestinationId) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route.orEmpty()
     val isDecisionsRoute = route.startsWith("decisions")
@@ -123,7 +130,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     onDone = { outcome ->
                         nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}") { popUpTo("home") }
                     },
-                    onBack = { nav.popBackStack() },
+                    onBack = ::navigateBackOrHome,
                 )
             }
             composable(
@@ -142,7 +149,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     reminderWarning = reminderWarning,
                     onReview = { nav.navigate("review/$id") },
                     onEdit = { nav.navigate("create?decisionId=$id") },
-                    onBack = { nav.popBackStack() },
+                    onBack = ::navigateBackOrHome,
                 )
             }
             composable("review/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
@@ -153,7 +160,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                         nav.previousBackStackEntry?.savedStateHandle?.set("reminderWarning", outcome.reminderWarning != null)
                         nav.popBackStack()
                     },
-                    onBack = { nav.popBackStack() },
+                    onBack = ::navigateBackOrHome,
                 )
             }
         }

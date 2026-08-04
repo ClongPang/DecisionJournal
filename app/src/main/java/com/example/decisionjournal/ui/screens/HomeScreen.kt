@@ -120,7 +120,7 @@ private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) 
 private fun EmptyArchiveState() {
     Column(Modifier.fillMaxWidth().padding(top = 42.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         ArchiveKicker("一段记录，会慢慢显影")
-        Text("今天还没有待回看的决定。", style = MaterialTheme.typography.titleMedium)
+        Text("还没有写下任何决定。", style = MaterialTheme.typography.titleMedium)
         Text("从一个小小的选择开始，为未来留下线索。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),

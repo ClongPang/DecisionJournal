@@ -106,6 +106,11 @@ class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepo
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
         private set
 
+    fun clearError() {
+        error = null
+        if (saveState is SaveState.Error) saveState = SaveState.Idle
+    }
+
     /** Do not ask for optional notification permission when the form itself is invalid. */
     fun validateBeforePermissionRequest(input: DecisionInput): Boolean {
         val message = DecisionValidation.validate(input) ?: return true
@@ -181,6 +186,11 @@ class ReviewViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
         private set
+
+    fun clearError() {
+        error = null
+        if (saveState is SaveState.Error) saveState = SaveState.Idle
+    }
     fun decisionState(id: Long) = repo.observe(id)
         .map { decision -> decision?.let(DecisionLoadState::Content) ?: DecisionLoadState.Missing }
         .onStart { emit(DecisionLoadState.Loading) }
