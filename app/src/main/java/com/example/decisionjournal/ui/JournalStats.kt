@@ -1,6 +1,8 @@
 package com.example.decisionjournal.ui
 
 import com.example.decisionjournal.data.model.Decision
+import java.time.LocalDate
+import java.time.ZoneId
 
 data class DecisionStats(
     val completedCount: Int,
@@ -13,6 +15,74 @@ data class SelfInsight(
     val description: String,
     val evidenceCount: Int,
 )
+
+enum class DecisionPeriod { TODAY, WEEK, MONTH, YEAR }
+
+data class DateTimeRange(val startInclusive: Long, val endExclusive: Long)
+
+data class CustomDateRange(val start: LocalDate, val endInclusive: LocalDate)
+
+sealed interface DecisionFilter {
+    data object All : DecisionFilter
+    data class Preset(val period: DecisionPeriod) : DecisionFilter
+    data class Custom(val range: CustomDateRange) : DecisionFilter
+}
+
+data class PeriodCounts(
+    val today: Int = 0,
+    val week: Int = 0,
+    val month: Int = 0,
+    val year: Int = 0,
+)
+
+fun dateTimeRange(period: DecisionPeriod, date: LocalDate, zone: ZoneId): DateTimeRange = when (period) {
+    DecisionPeriod.TODAY -> rangeBetween(date, date.plusDays(1), zone)
+    DecisionPeriod.WEEK -> {
+        val start = date.minusDays((date.dayOfWeek.value - 1).toLong())
+        rangeBetween(start, start.plusDays(7), zone)
+    }
+    DecisionPeriod.MONTH -> {
+        val start = date.withDayOfMonth(1)
+        rangeBetween(start, start.plusMonths(1), zone)
+    }
+    DecisionPeriod.YEAR -> {
+        val start = date.withDayOfYear(1)
+        rangeBetween(start, start.plusYears(1), zone)
+    }
+}
+
+fun dateTimeRange(range: CustomDateRange, zone: ZoneId): DateTimeRange =
+    rangeBetween(range.start, range.endInclusive.plusDays(1), zone)
+
+fun calculatePeriodCounts(decisions: List<Decision>, date: LocalDate, zone: ZoneId): PeriodCounts =
+    PeriodCounts(
+        today = countCreatedInRange(decisions, dateTimeRange(DecisionPeriod.TODAY, date, zone)),
+        week = countCreatedInRange(decisions, dateTimeRange(DecisionPeriod.WEEK, date, zone)),
+        month = countCreatedInRange(decisions, dateTimeRange(DecisionPeriod.MONTH, date, zone)),
+        year = countCreatedInRange(decisions, dateTimeRange(DecisionPeriod.YEAR, date, zone)),
+    )
+
+fun filterDecisions(decisions: List<Decision>, filter: DecisionFilter, date: LocalDate, zone: ZoneId): List<Decision> {
+    val range = when (filter) {
+        DecisionFilter.All -> null
+        is DecisionFilter.Preset -> dateTimeRange(filter.period, date, zone)
+        is DecisionFilter.Custom -> dateTimeRange(filter.range, zone)
+    }
+    return decisions
+        .asSequence()
+        .filter { range == null || it.createdAt in range.startInclusive until range.endExclusive }
+        .sortedWith(compareByDescending<Decision> { it.createdAt }.thenByDescending { it.id })
+        .toList()
+}
+
+private fun countCreatedInRange(decisions: List<Decision>, range: DateTimeRange): Int =
+    decisions.count { it.createdAt in range.startInclusive until range.endExclusive }
+
+private fun rangeBetween(start: LocalDate, endExclusive: LocalDate, zone: ZoneId): DateTimeRange =
+    DateTimeRange(
+        startInclusive = start.atStartOfDay(zone).toInstant().toEpochMilli(),
+        endExclusive = endExclusive.atStartOfDay(zone).toInstant().toEpochMilli(),
+    )
 
 fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats {
     val caredAbout = decisions

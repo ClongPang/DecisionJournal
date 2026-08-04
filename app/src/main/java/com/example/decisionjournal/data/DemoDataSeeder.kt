@@ -31,6 +31,7 @@ class DemoDataSeeder @Inject constructor(
             return
         }
 
+        // 已回看：包含两次复盘，用于验证详情页历史、预期对照和时间线。
         seedReviewed(
             decision = Decision(
                 question = "要不要接受那份工作？",
@@ -48,18 +49,31 @@ class DemoDataSeeder @Inject constructor(
                 Choice(decisionId = 0, text = "接受", benefits = listOf("进入更大的平台"), concerns = listOf("通勤时间变长")),
                 Choice(decisionId = 0, text = "拒绝", benefits = listOf("生活保持稳定"), concerns = listOf("可能错过成长机会")),
             ),
-            review = Review(
-                decisionId = 0,
-                createdAt = daysAgo(3),
-                result = "接受了工作。前两周压力比预期大，但确实遇到了新的学习机会。",
-                satisfaction = 4,
-                expectationMatch = ExpectationMatch.EXPECTED,
-                accurateJudgment = "判断到成长机会会增加。",
-                unexpectedFinding = "没有预料到适应团队需要这么久。",
-                nextTimeNote = "除了机会，也要提前了解团队的工作节奏。",
+            reviews = listOf(
+                Review(
+                    decisionId = 0,
+                    createdAt = daysAgo(20),
+                    result = "接受了工作。前两周压力比预期大，但确实遇到了新的学习机会。",
+                    satisfaction = 4,
+                    expectationMatch = ExpectationMatch.EXPECTED,
+                    accurateJudgment = "判断到成长机会会增加。",
+                    unexpectedFinding = "没有预料到适应团队需要这么久。",
+                    nextTimeNote = "除了机会，也要提前了解团队的工作节奏。",
+                ),
+                Review(
+                    decisionId = 0,
+                    createdAt = daysAgo(3),
+                    result = "适应期已经过去，工作内容比原岗位更有挑战，也开始建立新的生活节奏。",
+                    satisfaction = 5,
+                    expectationMatch = ExpectationMatch.BETTER,
+                    accurateJudgment = "成长空间和学习机会判断准确。",
+                    unexpectedFinding = "团队支持比预想中更充分。",
+                    nextTimeNote = "以后评估机会时，也要主动了解团队协作方式。",
+                ),
             ),
         )
 
+        // 未来待复盘：用于验证未来日期、通知任务和首页最近决定。
         seedActive(
             Decision(
                 question = "要不要开始一个长期副业？",
@@ -79,6 +93,7 @@ class DemoDataSeeder @Inject constructor(
             selectedIndex = 0,
         )
 
+        // 已到期：用于验证首页待复盘卡片和“待复盘”状态。
         seedActive(
             Decision(
                 question = "这次旅行要不要选择慢一点的路线？",
@@ -98,6 +113,7 @@ class DemoDataSeeder @Inject constructor(
             selectedIndex = 0,
         )
 
+        // 没有复盘日期：用于验证未设置日期状态和后续主动复盘入口。
         seedReviewed(
             Decision(
                 question = "要不要买一台新的相机？",
@@ -113,16 +129,54 @@ class DemoDataSeeder @Inject constructor(
                 Choice(decisionId = 0, text = "购买", benefits = listOf("更轻便"), concerns = listOf("价格较高")),
                 Choice(decisionId = 0, text = "继续使用旧相机", benefits = listOf("不增加支出"), concerns = listOf("可能继续闲置")),
             ),
-            Review(
-                decisionId = 0,
-                createdAt = daysAgo(20),
-                result = "买了之后前几周很常用，后来发现真正限制自己的不是设备，而是没有安排时间。",
-                satisfaction = 3,
-                expectationMatch = ExpectationMatch.WORSE,
-                accurateJudgment = "新设备确实更方便携带。",
-                unexpectedFinding = "设备并没有自动带来更多创作。",
-                nextTimeNote = "先确认自己是否愿意安排时间，再考虑购买工具。",
+            reviews = listOf(
+                Review(
+                    decisionId = 0,
+                    createdAt = daysAgo(20),
+                    result = "买了之后前几周很常用，后来发现真正限制自己的不是设备，而是没有安排时间。",
+                    satisfaction = 3,
+                    expectationMatch = ExpectationMatch.WORSE,
+                    accurateJudgment = "新设备确实更方便携带。",
+                    unexpectedFinding = "设备并没有自动带来更多创作。",
+                    nextTimeNote = "先确认自己是否愿意安排时间，再考虑购买工具。",
+                ),
             ),
+        )
+
+        // 活跃但不设置日期：用于验证无需提醒也可以长期保存的记录。
+        seedActive(
+            Decision(
+                question = "要不要搬到离公司更近的地方？",
+                context = "通勤时间很长，但搬家会增加租金和整理成本。",
+                benefits = listOf("生活平衡", "时间"),
+                concerns = listOf("金钱", "稳定"),
+                expectedOutcome = "如果搬家，预计每天可以多出一个小时休息和运动。",
+                confidence = 3,
+                futureNote = "不要只比较房租，也要比较每天被通勤占用的时间。",
+            ),
+            listOf(
+                Choice(decisionId = 0, text = "搬到公司附近", benefits = listOf("减少通勤", "有更多休息时间"), concerns = listOf("租金增加")),
+                Choice(decisionId = 0, text = "继续住在现在的地方", benefits = listOf("保持熟悉的生活环境"), concerns = listOf("长期通勤消耗精力")),
+            ),
+            selectedIndex = null,
+        )
+
+        // 今天到期且尚未选最终方案：用于验证不强制最终选择也能保存和复盘。
+        seedActive(
+            Decision(
+                question = "要不要报名那门周末课程？",
+                context = "课程内容很感兴趣，但会占用连续八个周末。",
+                benefits = listOf("学习", "成长"),
+                concerns = listOf("时间", "生活平衡"),
+                expectedOutcome = "希望建立一个稳定的学习节奏。",
+                confidence = 2,
+                reviewDate = daysAgo(0),
+            ),
+            listOf(
+                Choice(decisionId = 0, text = "报名课程", benefits = listOf("系统学习"), concerns = listOf("周末时间减少")),
+                Choice(decisionId = 0, text = "先自学两周", benefits = listOf("成本更低"), concerns = listOf("容易缺少持续性")),
+            ),
+            selectedIndex = null,
         )
 
         prefs.edit().putBoolean(SEEDED_KEY, true).apply()
@@ -133,9 +187,11 @@ class DemoDataSeeder @Inject constructor(
         reminderScheduler.scheduleOrCancel(id, decision.reviewDate)
     }
 
-    private suspend fun seedReviewed(decision: Decision, choices: List<Choice>, review: Review) {
+    private suspend fun seedReviewed(decision: Decision, choices: List<Choice>, reviews: List<Review>) {
         val id = dao.save(decision.copy(status = DecisionStatus.ACTIVE), choices)
-        dao.saveReview(review.copy(decisionId = id), null, review.createdAt)
+        reviews.sortedBy { it.createdAt }.forEach { review ->
+            dao.saveReview(review.copy(decisionId = id), null, review.createdAt)
+        }
     }
 
     private fun daysAgo(days: Long): Long = dayOffset(-days)
@@ -144,6 +200,6 @@ class DemoDataSeeder @Inject constructor(
 
     private companion object {
         const val PREFS_NAME = "demo-data"
-        const val SEEDED_KEY = "seeded-v1"
+        const val SEEDED_KEY = "seeded-v2"
     }
 }

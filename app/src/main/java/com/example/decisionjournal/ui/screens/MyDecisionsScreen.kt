@@ -1,5 +1,6 @@
 package com.example.decisionjournal.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,9 +25,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -39,6 +43,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.ui.DecisionsViewModel
+import com.example.decisionjournal.ui.CustomDateRange
+import com.example.decisionjournal.ui.DecisionFilter
+import com.example.decisionjournal.ui.DecisionPeriod
+import com.example.decisionjournal.ui.PeriodCounts
 import com.example.decisionjournal.ui.calculateSelfInsights
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.JournalTopBar
@@ -49,6 +57,7 @@ import com.example.decisionjournal.ui.theme.JournalDimens
 import com.example.decisionjournal.ui.theme.MistBlue
 import com.example.decisionjournal.ui.theme.MistGreen
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -63,7 +72,44 @@ fun MyDecisionsScreen(
 ) {
     val decisions by vm.decisions.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val periodCounts by vm.periodCounts.collectAsStateWithLifecycle()
+    val selectedFilter by vm.selectedFilter.collectAsStateWithLifecycle()
+    val filteredDecisions by vm.filteredDecisions.collectAsStateWithLifecycle()
     val now = remember { System.currentTimeMillis() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var customError by remember { mutableStateOf<String?>(null) }
+
+    fun chooseCustomRange() {
+        customError = null
+        val today = LocalDate.now()
+        val initialStart = today.minusDays(6)
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                val start = LocalDate.of(year, month + 1, day)
+                DatePickerDialog(
+                    context,
+                    { _, endYear, endMonth, endDay ->
+                        val end = LocalDate.of(endYear, endMonth + 1, endDay)
+                        if (end.isBefore(start)) {
+                            customError = "结束日期不能早于开始日期"
+                        } else {
+                            vm.selectFilter(DecisionFilter.Custom(CustomDateRange(start, end)))
+                        }
+                    },
+                    today.year,
+                    today.monthValue - 1,
+                    today.dayOfMonth,
+                ).apply {
+                    datePicker.minDate = start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    datePicker.maxDate = System.currentTimeMillis()
+                }.show()
+            },
+            initialStart.year,
+            initialStart.monthValue - 1,
+            initialStart.dayOfMonth,
+        ).apply { datePicker.maxDate = System.currentTimeMillis() }.show()
+    }
 
     Column(
         Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical)
@@ -74,6 +120,17 @@ fun MyDecisionsScreen(
             title = if (showStats) "认识自己" else "全部决定",
             subtitle = if (showStats) "看见自己是如何做决定的" else null,
         )
+
+        if (!showStats) {
+            PeriodOverview(
+                counts = periodCounts,
+                selectedFilter = selectedFilter,
+                customError = customError,
+                onSelect = { vm.selectFilter(DecisionFilter.Preset(it)) },
+                onCustomRange = ::chooseCustomRange,
+                onClear = vm::clearFilter,
+            )
+        }
 
         if (showStats) {
             Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
@@ -88,14 +145,92 @@ fun MyDecisionsScreen(
             }
         }
 
-        SectionHeader(if (showStats) "决策时间线" else "全部记录")
-        if (decisions.isEmpty()) {
-            EmptyJournalState("还没有记录，先写下一个决定吧。", "记录一个决定", onCreate)
+        val timelineDecisions = if (showStats) decisions else filteredDecisions
+        val timelineTitle = if (showStats) "决策时间线" else when (val filter = selectedFilter) {
+            DecisionFilter.All -> "全部记录"
+            is DecisionFilter.Preset -> "${filter.period.label()}的决定"
+            is DecisionFilter.Custom -> "指定范围内的决定"
+        }
+        SectionHeader(timelineTitle)
+        if (timelineDecisions.isEmpty()) {
+            EmptyJournalState(
+                if (showStats || selectedFilter == DecisionFilter.All) "还没有记录，先写下一个决定吧。" else "这个时间范围还没有决定。",
+                if (showStats || selectedFilter == DecisionFilter.All) "记录一个决定" else "清除筛选",
+                if (showStats || selectedFilter == DecisionFilter.All) onCreate else vm::clearFilter,
+            )
         } else {
-            TimelineContainer(decisions, now, onOpen)
+            TimelineContainer(timelineDecisions, now, onOpen)
         }
         Spacer(Modifier.height(8.dp))
     }
+}
+
+@Composable
+private fun PeriodOverview(
+    counts: PeriodCounts,
+    selectedFilter: DecisionFilter,
+    customError: String?,
+    onSelect: (DecisionPeriod) -> Unit,
+    onCustomRange: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PeriodCard("今日", counts.today, selectedFilter == DecisionFilter.Preset(DecisionPeriod.TODAY), onClick = { onSelect(DecisionPeriod.TODAY) }, modifier = Modifier.weight(1f))
+            PeriodCard("本周", counts.week, selectedFilter == DecisionFilter.Preset(DecisionPeriod.WEEK), onClick = { onSelect(DecisionPeriod.WEEK) }, modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PeriodCard("本月", counts.month, selectedFilter == DecisionFilter.Preset(DecisionPeriod.MONTH), onClick = { onSelect(DecisionPeriod.MONTH) }, modifier = Modifier.weight(1f))
+            PeriodCard("今年", counts.year, selectedFilter == DecisionFilter.Preset(DecisionPeriod.YEAR), onClick = { onSelect(DecisionPeriod.YEAR) }, modifier = Modifier.weight(1f))
+        }
+        val custom = (selectedFilter as? DecisionFilter.Custom)?.range
+        SoftSurfaceCard(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = if (custom != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+            onClick = onCustomRange,
+        ) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("指定范围", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (custom == null) "选择开始和结束日期" else "${custom.start.format(timelineDate)} — ${custom.endInclusive.format(timelineDate)}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                TextButton(onClick = if (custom == null) onCustomRange else onClear) { Text(if (custom == null) "选择" else "清除") }
+            }
+        }
+        customError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    }
+}
+
+@Composable
+private fun PeriodCard(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    SoftSurfaceCard(
+        modifier = modifier,
+        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        onClick = onClick,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("$count", style = MaterialTheme.typography.displaySmall)
+            Text("个决定", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun DecisionPeriod.label(): String = when (this) {
+    DecisionPeriod.TODAY -> "今日"
+    DecisionPeriod.WEEK -> "本周"
+    DecisionPeriod.MONTH -> "本月"
+    DecisionPeriod.YEAR -> "今年"
 }
 
 @Composable

@@ -1,6 +1,11 @@
 package com.example.decisionjournal.ui.screens
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import com.example.decisionjournal.data.ChoiceInput
 import com.example.decisionjournal.data.DecisionInput
 import com.example.decisionjournal.data.model.Decision
@@ -49,7 +55,7 @@ private val createDate = DateTimeFormatter.ofPattern("yyyy年M月d日")
 private fun lines(value: String): List<String> = value.split(',', '，', '\n').map(String::trim).filter(String::isNotEmpty)
 
 @Composable
-fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
+fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, onBack: () -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
     val existing by (decisionId?.let { vm.decision(it) } ?: flowOf<Decision?>(null)).collectAsStateWithLifecycle(null)
     val existingChoices by (decisionId?.let { vm.choices(it) } ?: flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
     var step by remember { mutableStateOf(0) }
@@ -63,11 +69,17 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
     var choiceText by remember { mutableStateOf("") }
     var choiceBenefits by remember { mutableStateOf("") }
     var choiceConcerns by remember { mutableStateOf("") }
+    var editingChoiceIndex by remember { mutableStateOf<Int?>(null) }
     var choices by remember { mutableStateOf(listOf<ChoiceInput>()) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var reviewDate by remember { mutableStateOf<Long?>(null) }
     var initialized by remember { mutableStateOf(false) }
+    var pendingInput by remember { mutableStateOf<DecisionInput?>(null) }
     val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        pendingInput?.let { vm.save(it, onDone) }
+        pendingInput = null
+    }
 
     LaunchedEffect(existing, existingChoices, decisionId) {
         if (!initialized && existing != null) {
@@ -86,13 +98,31 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
         }
     }
 
-    fun save() = vm.save(DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull()), onDone)
-    fun addPendingChoice() {
+    fun save() {
+        val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull())
+        val needsPermission = Build.VERSION.SDK_INT >= 33 && reviewDate != null && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            pendingInput = input
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            vm.save(input, onDone)
+        }
+    }
+    fun savePendingChoice() {
         if (choiceText.trim().isEmpty()) return
-        choices = choices + ChoiceInput(choiceText.trim(), lines(choiceBenefits), lines(choiceConcerns))
+        val nextChoice = ChoiceInput(choiceText.trim(), lines(choiceBenefits), lines(choiceConcerns))
+        choices = editingChoiceIndex?.let { index -> choices.toMutableList().also { it[index] = nextChoice } } ?: (choices + nextChoice)
+        editingChoiceIndex = null
         choiceText = ""
         choiceBenefits = ""
         choiceConcerns = ""
+    }
+    fun editChoice(index: Int) {
+        val choice = choices[index]
+        editingChoiceIndex = index
+        choiceText = choice.text
+        choiceBenefits = choice.benefits.joinToString("，")
+        choiceConcerns = choice.concerns.joinToString("，")
     }
     fun showDatePicker() {
         val date = reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now().plusDays(7)
@@ -100,7 +130,10 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical), verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing)) {
-        Text(if (decisionId == null) "新的决定" else "编辑决定", style = MaterialTheme.typography.headlineSmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ 返回") }
+            Text(if (decisionId == null) "新的决定" else "编辑决定", style = MaterialTheme.typography.headlineSmall)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("${step + 1} / 3", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(listOf("先想清楚", "比较选择", "未来再看")[step], color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
@@ -111,22 +144,19 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
                 Text("我在决定什么？", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(question, { question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
                 OutlinedTextField(contextText, { contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
-                OutlinedTextField(benefitsText, { benefitsText = it }, Modifier.fillMaxWidth(), label = { Text("我在意的事（用逗号分隔）") })
-                OutlinedTextField(concernsText, { concernsText = it }, Modifier.fillMaxWidth(), label = { Text("我担心的事（用逗号分隔）") })
-                OutlinedTextField(expectedOutcome, { expectedOutcome = it }, Modifier.fillMaxWidth(), label = { Text("我预期会发生什么（可选）") })
-                OutlinedTextField(confidence, { confidence = it.filter(Char::isDigit).take(1) }, Modifier.fillMaxWidth(), label = { Text("判断信心（1–5，可选）") })
             }
             1 -> {
                 Text("我有哪些选择？", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(choiceText, { choiceText = it }, Modifier.fillMaxWidth(), label = { Text("候选选项*") })
                 OutlinedTextField(choiceBenefits, { choiceBenefits = it }, Modifier.fillMaxWidth(), label = { Text("这个选项的利好（可选）") })
                 OutlinedTextField(choiceConcerns, { choiceConcerns = it }, Modifier.fillMaxWidth(), label = { Text("这个选项的担忧（可选）") })
-                TextButton(enabled = choiceText.isNotBlank(), onClick = ::addPendingChoice) { Text("添加选项") }
+                TextButton(enabled = choiceText.isNotBlank(), onClick = ::savePendingChoice) { Text(if (editingChoiceIndex == null) "添加选项" else "保存修改") }
                 choices.forEachIndexed { index, choice ->
                     SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = if (selected == index) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(selected == index, { selected = index })
                             Column(Modifier.weight(1f)) { Text(choice.text); Text("利好 ${choice.benefits.size} · 担忧 ${choice.concerns.size}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            TextButton(onClick = { editChoice(index) }) { Text("编辑") }
                             IconButton(onClick = { choices = choices.toMutableList().also { it.removeAt(index) }; selected = when { selected == index -> null; selected != null && selected!! > index -> selected!! - 1; else -> selected } }) { Text("×") }
                         }
                     }
@@ -136,11 +166,16 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
                 Text("写给未来的自己", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(futureNote, { if (it.length <= 500) futureNote = it }, Modifier.fillMaxWidth().height(180.dp), label = { Text("写给未来的自己") }, placeholder = { Text("希望我能做出不后悔的选择。") })
                 Text("${futureNote.length}/500", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(benefitsText, { benefitsText = it }, Modifier.fillMaxWidth(), label = { Text("我在意的事（可选，用逗号分隔）") })
+                OutlinedTextField(concernsText, { concernsText = it }, Modifier.fillMaxWidth(), label = { Text("我担心的事（可选，用逗号分隔）") })
+                OutlinedTextField(expectedOutcome, { expectedOutcome = it }, Modifier.fillMaxWidth(), label = { Text("我预期会发生什么（可选）") })
+                OutlinedTextField(confidence, { confidence = it.filter(Char::isDigit).take(1) }, Modifier.fillMaxWidth(), label = { Text("判断信心（1–5，可选）") })
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = ::showDatePicker) { Text(if (reviewDate == null) "设置复盘日期" else "修改复盘日期") }
                     reviewDate?.let { Text(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)) }
                     if (reviewDate != null) TextButton({ reviewDate = null }) { Text("清除") }
                 }
+                Text("设置复盘日期后，系统会询问是否允许发送提醒。拒绝权限也不影响保存。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
         vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -150,13 +185,13 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
             Button(
                 enabled = when (step) { 0 -> question.trim().isNotEmpty(); 1 -> choices.isNotEmpty() || choiceText.trim().isNotEmpty(); else -> true },
                 onClick = {
-                    if (step == 1 && choiceText.trim().isNotEmpty()) addPendingChoice()
+                    if (step == 1 && choiceText.trim().isNotEmpty()) savePendingChoice()
                     if (step < 2) step++ else save()
                 },
                 modifier = Modifier.weight(2f).height(JournalDimens.buttonHeight),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            ) { Text(if (step < 2) "继续" else "保存") }
+            ) { Text(if (vm.saveState == com.example.decisionjournal.ui.SaveState.Saving) "保存中…" else if (step < 2) "继续" else "保存") }
         }
     }
 }

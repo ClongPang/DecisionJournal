@@ -16,7 +16,7 @@ data class DecisionDetail(val decision: Decision, val choices: List<Choice>, val
 
 @Dao
 abstract class DecisionDao {
-    @Query("SELECT * FROM decisions ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM decisions ORDER BY createdAt DESC, id DESC")
     abstract fun observeAll(): Flow<List<Decision>>
 
     @Query("SELECT * FROM decisions WHERE reviewDate IS NOT NULL AND reviewDate <= :today AND status != 'REVIEWED' ORDER BY reviewDate ASC")
@@ -50,8 +50,7 @@ abstract class DecisionDao {
         updateReviewSchedule(
             review.decisionId,
             nextReviewDate,
-            if (nextReviewDate == null) com.example.decisionjournal.data.model.DecisionStatus.REVIEWED
-            else com.example.decisionjournal.data.model.DecisionStatus.ACTIVE,
+            com.example.decisionjournal.data.DecisionStatusRules.afterReview(nextReviewDate),
             updatedAt,
         )
         return id

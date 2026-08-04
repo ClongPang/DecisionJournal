@@ -3,6 +3,7 @@ package com.example.decisionjournal.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import com.example.decisionjournal.data.model.DecisionStatus
 
 class ValidationTest {
     @Test
@@ -51,5 +52,27 @@ class ValidationTest {
         assertEquals("判断信心必须为 1 至 5", DecisionValidation.validate(input))
         assertNull(DecisionValidation.validate(input.copy(confidence = 1)))
         assertNull(DecisionValidation.validate(input.copy(confidence = null)))
+    }
+
+    @Test
+    fun editingReviewedDecisionKeepsReviewedStatusWhenDateIsUnchanged() {
+        assertEquals(
+            DecisionStatus.REVIEWED,
+            DecisionStatusRules.afterDecisionSave(DecisionStatus.REVIEWED, 100L, 100L),
+        )
+    }
+
+    @Test
+    fun changingReviewDateReactivatesReviewedDecision() {
+        assertEquals(
+            DecisionStatus.ACTIVE,
+            DecisionStatusRules.afterDecisionSave(DecisionStatus.REVIEWED, 100L, 200L),
+        )
+    }
+
+    @Test
+    fun reviewWithoutNextDateIsCompleted() {
+        assertEquals(DecisionStatus.REVIEWED, DecisionStatusRules.afterReview(null))
+        assertEquals(DecisionStatus.ACTIVE, DecisionStatusRules.afterReview(200L))
     }
 }
