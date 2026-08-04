@@ -33,7 +33,7 @@ import com.example.decisionjournal.ui.theme.Hairline
 import com.example.decisionjournal.ui.theme.MistGreen
 
 @Composable
-fun DecisionJournalApp() {
+fun DecisionJournalApp(initialDecisionId: Long? = null) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route.orEmpty()
@@ -79,7 +79,7 @@ fun DecisionJournalApp() {
     }) { padding ->
         NavHost(
             navController = nav,
-            startDestination = "home",
+            startDestination = initialDecisionId?.let { "detail/$it" } ?: "home",
             modifier = Modifier.padding(padding).background(MaterialTheme.colorScheme.background),
         ) {
             composable("home") { HomeScreen({ nav.navigate("create") }, { nav.navigate("detail/$it") }) }

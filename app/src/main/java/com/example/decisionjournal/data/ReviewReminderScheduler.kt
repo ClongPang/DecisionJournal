@@ -20,6 +20,7 @@ import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import com.example.decisionjournal.MainActivity
+import com.example.decisionjournal.EXTRA_REMINDER_DECISION_ID
 
 private const val CHANNEL_ID = "review-reminders"
 private const val WORK_PREFIX = "decision-review-"
@@ -61,7 +62,7 @@ class ReviewReminderWorker(context: Context, params: WorkerParameters) : Worker(
                 PendingIntent.getActivity(
                     applicationContext,
                     id,
-                    Intent(applicationContext, MainActivity::class.java),
+                Intent(applicationContext, MainActivity::class.java).putExtra(EXTRA_REMINDER_DECISION_ID, inputData.getLong(DECISION_ID, 0L)),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
             )

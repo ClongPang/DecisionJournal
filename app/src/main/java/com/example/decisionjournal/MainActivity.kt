@@ -11,7 +11,10 @@ import com.example.decisionjournal.data.DemoDataSeeder
 import kotlinx.coroutines.launch
 import com.example.decisionjournal.BuildConfig
 import com.example.decisionjournal.ui.DecisionJournalApp
+
 import com.example.decisionjournal.ui.theme.DecisionJournalTheme
+
+const val EXTRA_REMINDER_DECISION_ID = "extra_reminder_decision_id"
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -23,8 +26,9 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) {
             lifecycleScope.launch { demoDataSeeder.seedIfNeeded() }
         }
+        val initialDecisionId = intent.getLongExtra(EXTRA_REMINDER_DECISION_ID, 0L).takeIf { it > 0L }
         setContent {
-            DecisionJournalTheme { DecisionJournalApp() }
+            DecisionJournalTheme { DecisionJournalApp(initialDecisionId = initialDecisionId) }
         }
     }
 }
