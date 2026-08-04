@@ -3,6 +3,7 @@ package com.example.decisionjournal.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -104,7 +105,7 @@ private fun Overview(completed: Int, caredAbout: String, due: Int) {
                 Icon(Icons.Rounded.CalendarToday, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 4.dp))
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SmallInsightCard("最常在意", caredAbout, Icons.Rounded.FavoriteBorder, Modifier.weight(1f), MaterialTheme.colorScheme.surface)
             SmallInsightCard("待复盘", "$due 个", Icons.Rounded.Schedule, Modifier.weight(1f), MistGreen)
         }
@@ -113,7 +114,7 @@ private fun Overview(completed: Int, caredAbout: String, due: Int) {
 
 @Composable
 private fun SmallInsightCard(title: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, color: Color) {
-    SoftSurfaceCard(modifier = modifier, containerColor = color) {
+    SoftSurfaceCard(modifier = modifier.fillMaxHeight(), containerColor = color) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(18.dp))
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
