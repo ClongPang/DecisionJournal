@@ -73,6 +73,9 @@ fun DecisionDetailScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("写给未来的自己", style = MaterialTheme.typography.titleMedium); Text(it) }
                 }
             }
+            d.expectedOutcome?.takeIf { it.isNotBlank() }?.let {
+                DetailNoteCard("当时的预期", listOf(it) + (d.confidence?.let { level -> listOf("判断信心：$level/5") } ?: emptyList()))
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("编辑") }
                 Button(onClick = onReview, modifier = Modifier.weight(1f)) { Text("记录复盘") }
@@ -84,6 +87,10 @@ fun DecisionDetailScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(review.result)
                         review.satisfaction?.let { Text("满意度 $it/5", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+                        review.expectationMatch?.let { Text("与预期：${it.label()}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+                        review.accurateJudgment?.takeIf { it.isNotBlank() }?.let { Text("判断准确：$it") }
+                        review.unexpectedFinding?.takeIf { it.isNotBlank() }?.let { Text("意外发现：$it") }
+                        review.nextTimeNote?.takeIf { it.isNotBlank() }?.let { Text("下次注意：$it") }
                     }
                 }
             }
@@ -97,6 +104,13 @@ fun DecisionDetailScreen(
         confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete(id, onBack) }) { Text("删除") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
     )
+}
+
+private fun com.example.decisionjournal.data.model.ExpectationMatch.label(): String = when (this) {
+    com.example.decisionjournal.data.model.ExpectationMatch.EXPECTED -> "符合预期"
+    com.example.decisionjournal.data.model.ExpectationMatch.BETTER -> "比预期好"
+    com.example.decisionjournal.data.model.ExpectationMatch.WORSE -> "比预期差"
+    com.example.decisionjournal.data.model.ExpectationMatch.UNCLEAR -> "还不确定"
 }
 
 @Composable

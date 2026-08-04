@@ -27,4 +27,25 @@ class JournalStatsTest {
 
         assertEquals(null, stats.mostCaredAbout)
     }
+
+    @Test
+    fun selfInsightsRequireTraceableEvidence() {
+        val decisions = listOf(
+            Decision(question = "一", benefits = listOf("成长"), concerns = listOf("压力")),
+            Decision(question = "二", benefits = listOf("成长"), concerns = listOf("压力")),
+            Decision(question = "三", benefits = listOf("成长"), concerns = listOf("压力")),
+        )
+
+        val insights = calculateSelfInsights(decisions)
+
+        assertEquals(listOf("你最近反复在意", "你经常担心"), insights.map { it.title })
+        assertEquals(3, insights.first().evidenceCount)
+    }
+
+    @Test
+    fun selfInsightsAreNotGeneratedWithInsufficientEvidence() {
+        val decisions = listOf(Decision(question = "一", benefits = listOf("成长")))
+
+        assertEquals(emptyList<SelfInsight>(), calculateSelfInsights(decisions))
+    }
 }

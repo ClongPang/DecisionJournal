@@ -10,4 +10,10 @@ data class Review(
     val createdAt: Long = System.currentTimeMillis(),
     val result: String,
     val satisfaction: Int? = null,
+    val expectationMatch: ExpectationMatch? = null,
+    val accurateJudgment: String? = null,
+    val unexpectedFinding: String? = null,
+    val nextTimeNote: String? = null,
 )
+
+enum class ExpectationMatch { EXPECTED, BETTER, WORSE, UNCLEAR }

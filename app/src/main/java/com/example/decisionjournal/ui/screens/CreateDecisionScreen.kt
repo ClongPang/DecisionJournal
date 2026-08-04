@@ -58,6 +58,8 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
     var benefitsText by remember { mutableStateOf("") }
     var concernsText by remember { mutableStateOf("") }
     var futureNote by remember { mutableStateOf("") }
+    var expectedOutcome by remember { mutableStateOf("") }
+    var confidence by remember { mutableStateOf("") }
     var choiceText by remember { mutableStateOf("") }
     var choiceBenefits by remember { mutableStateOf("") }
     var choiceConcerns by remember { mutableStateOf("") }
@@ -75,6 +77,8 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
             benefitsText = decision.benefits.joinToString("，")
             concernsText = decision.concerns.joinToString("，")
             futureNote = decision.futureNote.orEmpty()
+            expectedOutcome = decision.expectedOutcome.orEmpty()
+            confidence = decision.confidence?.toString().orEmpty()
             choices = existingChoices.map { ChoiceInput(it.text, it.benefits, it.concerns) }
             selected = existingChoices.indexOfFirst { it.id == decision.selectedChoiceId }.takeIf { it >= 0 }
             reviewDate = decision.reviewDate
@@ -82,7 +86,7 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
         }
     }
 
-    fun save() = vm.save(DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote), onDone)
+    fun save() = vm.save(DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull()), onDone)
     fun addPendingChoice() {
         if (choiceText.trim().isEmpty()) return
         choices = choices + ChoiceInput(choiceText.trim(), lines(choiceBenefits), lines(choiceConcerns))
@@ -109,6 +113,8 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (Long) -> Unit, vm: CreateDe
                 OutlinedTextField(contextText, { contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
                 OutlinedTextField(benefitsText, { benefitsText = it }, Modifier.fillMaxWidth(), label = { Text("我在意的事（用逗号分隔）") })
                 OutlinedTextField(concernsText, { concernsText = it }, Modifier.fillMaxWidth(), label = { Text("我担心的事（用逗号分隔）") })
+                OutlinedTextField(expectedOutcome, { expectedOutcome = it }, Modifier.fillMaxWidth(), label = { Text("我预期会发生什么（可选）") })
+                OutlinedTextField(confidence, { confidence = it.filter(Char::isDigit).take(1) }, Modifier.fillMaxWidth(), label = { Text("判断信心（1–5，可选）") })
             }
             1 -> {
                 Text("我有哪些选择？", style = MaterialTheme.typography.titleMedium)

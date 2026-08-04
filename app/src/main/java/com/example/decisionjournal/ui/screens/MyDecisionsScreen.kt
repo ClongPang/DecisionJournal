@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.ui.DecisionsViewModel
+import com.example.decisionjournal.ui.calculateSelfInsights
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.SectionHeader
@@ -70,12 +71,21 @@ fun MyDecisionsScreen(
         verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
     ) {
         JournalTopBar(
-            title = if (showStats) "我的决定" else "全部决定",
-            subtitle = if (showStats) "每一次选择，都值得被记住" else null,
+            title = if (showStats) "认识自己" else "全部决定",
+            subtitle = if (showStats) "看见自己是如何做决定的" else null,
         )
 
         if (showStats) {
             Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
+            calculateSelfInsights(decisions).forEach { insight ->
+                SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(insight.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(insight.description, style = MaterialTheme.typography.titleMedium)
+                        Text("来自 ${insight.evidenceCount} 条记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
 
         SectionHeader(if (showStats) "决策时间线" else "全部记录")

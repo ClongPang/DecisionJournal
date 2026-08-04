@@ -5,6 +5,7 @@ import com.example.decisionjournal.data.local.DecisionDetail
 import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
+import com.example.decisionjournal.data.model.ExpectationMatch
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
@@ -19,12 +20,18 @@ data class DecisionInput(
     val benefits: List<String> = emptyList(),
     val concerns: List<String> = emptyList(),
     val futureNote: String? = null,
+    val expectedOutcome: String? = null,
+    val confidence: Int? = null,
 )
 data class ReviewInput(
     val decisionId: Long,
     val result: String,
     val satisfaction: Int?,
     val nextReviewDate: Long? = null,
+    val expectationMatch: ExpectationMatch? = null,
+    val accurateJudgment: String? = null,
+    val unexpectedFinding: String? = null,
+    val nextTimeNote: String? = null,
 )
 
 class DecisionRepository @Inject constructor(
@@ -48,6 +55,8 @@ class DecisionRepository @Inject constructor(
             benefits = input.benefits.map(String::trim).filter(String::isNotEmpty),
             concerns = input.concerns.map(String::trim).filter(String::isNotEmpty),
             futureNote = input.futureNote?.trim()?.takeIf { it.isNotEmpty() },
+            expectedOutcome = input.expectedOutcome?.trim()?.takeIf { it.isNotEmpty() },
+            confidence = input.confidence,
             createdAt = previous?.createdAt ?: now,
             updatedAt = now,
             reviewDate = input.reviewDate,
@@ -61,7 +70,15 @@ class DecisionRepository @Inject constructor(
     suspend fun review(input: ReviewInput): Result<Long> = runCatching {
         require(ReviewValidation.validate(input) == null)
         val id = dao.saveReview(
-            Review(decisionId = input.decisionId, result = input.result.trim(), satisfaction = input.satisfaction),
+            Review(
+                decisionId = input.decisionId,
+                result = input.result.trim(),
+                satisfaction = input.satisfaction,
+                expectationMatch = input.expectationMatch,
+                accurateJudgment = input.accurateJudgment?.trim()?.takeIf { it.isNotEmpty() },
+                unexpectedFinding = input.unexpectedFinding?.trim()?.takeIf { it.isNotEmpty() },
+                nextTimeNote = input.nextTimeNote?.trim()?.takeIf { it.isNotEmpty() },
+            ),
             input.nextReviewDate,
             System.currentTimeMillis(),
         )

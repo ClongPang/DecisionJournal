@@ -18,7 +18,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): DecisionDatabase =
         Room.databaseBuilder(context, DecisionDatabase::class.java, "decision-journal.db")
-            .addMigrations(DecisionDatabase.MIGRATION_2_3)
+            .addMigrations(DecisionDatabase.MIGRATION_2_3, DecisionDatabase.MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
 

@@ -8,6 +8,7 @@ object DecisionValidation {
         val choices = cleanChoices(input.choices)
         if (choices.isEmpty()) return "至少需要一个候选选项"
         if (input.selectedChoiceIndex != null && input.selectedChoiceIndex !in choices.indices) return "最终选择无效"
+        if (input.confidence != null && input.confidence !in 1..5) return "判断信心必须为 1 至 5"
         return null
     }
 }

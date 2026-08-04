@@ -37,4 +37,19 @@ class ValidationTest {
         assertNull(ReviewValidation.validate(invalid.copy(satisfaction = 1)))
         assertNull(ReviewValidation.validate(invalid.copy(satisfaction = null)))
     }
+
+    @Test
+    fun confidenceMustBeBetweenOneAndFive() {
+        val input = DecisionInput(
+            question = "要不要换工作",
+            context = null,
+            reviewDate = null,
+            selectedChoiceIndex = null,
+            choices = listOf(ChoiceInput("接受")),
+            confidence = 6,
+        )
+        assertEquals("判断信心必须为 1 至 5", DecisionValidation.validate(input))
+        assertNull(DecisionValidation.validate(input.copy(confidence = 1)))
+        assertNull(DecisionValidation.validate(input.copy(confidence = null)))
+    }
 }

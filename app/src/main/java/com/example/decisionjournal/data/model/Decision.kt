@@ -11,6 +11,8 @@ data class Decision(
     val benefits: List<String> = emptyList(),
     val concerns: List<String> = emptyList(),
     val futureNote: String? = null,
+    val expectedOutcome: String? = null,
+    val confidence: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
     val reviewDate: Long? = null,

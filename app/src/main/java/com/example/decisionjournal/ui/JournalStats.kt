@@ -8,6 +8,12 @@ data class DecisionStats(
     val mostCaredAbout: String?,
 )
 
+data class SelfInsight(
+    val title: String,
+    val description: String,
+    val evidenceCount: Int,
+)
+
 fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats {
     val caredAbout = decisions
         .flatMap { it.benefits }
@@ -23,4 +29,28 @@ fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats 
         dueCount = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status.name != "REVIEWED" },
         mostCaredAbout = caredAbout,
     )
+}
+
+/**
+ * 只生成可追溯的描述性观察；记录不足时不强行给用户下结论。
+ */
+fun calculateSelfInsights(decisions: List<Decision>, minimumEvidence: Int = 3): List<SelfInsight> {
+    fun frequency(values: List<String>): Pair<String, Int>? = values
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .groupingBy { it }
+        .eachCount()
+        .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        ?.let { it.key to it.value }
+
+    val cared = frequency(decisions.flatMap { it.benefits })
+    val concerns = frequency(decisions.flatMap { it.concerns })
+    return buildList {
+        if (cared != null && cared.second >= minimumEvidence) {
+            add(SelfInsight("你最近反复在意", cared.first, cared.second))
+        }
+        if (concerns != null && concerns.second >= minimumEvidence) {
+            add(SelfInsight("你经常担心", concerns.first, concerns.second))
+        }
+    }
 }

@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.decisionjournal.data.ReviewInput
+import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.ui.ReviewViewModel
 import com.example.decisionjournal.ui.components.PrimaryActionButton
 import com.example.decisionjournal.ui.theme.JournalDimens
@@ -27,6 +28,10 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hil
     var result by remember { mutableStateOf("") }
     var satisfaction by remember { mutableStateOf("") }
     var nextReviewDate by remember { mutableStateOf<Long?>(null) }
+    var expectationMatch by remember { mutableStateOf<ExpectationMatch?>(null) }
+    var accurateJudgment by remember { mutableStateOf("") }
+    var unexpectedFinding by remember { mutableStateOf("") }
+    var nextTimeNote by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     fun showDatePicker() {
@@ -49,6 +54,17 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hil
         Text("当时的决定，现在感觉如何？", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(value = result, onValueChange = { result = it }, modifier = Modifier.fillMaxWidth().height(180.dp), label = { Text("记录结果*") }, placeholder = { Text("事情后来怎么样了？") })
         OutlinedTextField(value = satisfaction, onValueChange = { satisfaction = it.filter(Char::isDigit).take(1) }, modifier = Modifier.fillMaxWidth(), label = { Text("满意度（1–5，可选）") })
+        Text("结果和预期相比如何？", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ExpectationMatch.values().forEach { match ->
+                TextButton(onClick = { expectationMatch = match }) {
+                    Text(if (expectationMatch == match) "✓ ${match.label()}" else match.label())
+                }
+            }
+        }
+        OutlinedTextField(value = accurateJudgment, onValueChange = { accurateJudgment = it }, modifier = Modifier.fillMaxWidth(), label = { Text("我判断准确的地方（可选）") })
+        OutlinedTextField(value = unexpectedFinding, onValueChange = { unexpectedFinding = it }, modifier = Modifier.fillMaxWidth(), label = { Text("我没想到的地方（可选）") })
+        OutlinedTextField(value = nextTimeNote, onValueChange = { nextTimeNote = it }, modifier = Modifier.fillMaxWidth(), label = { Text("下次我会注意什么（可选）") })
         Text("还要继续回看吗？", style = MaterialTheme.typography.titleMedium)
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             TextButton(onClick = ::showDatePicker) { Text(if (nextReviewDate == null) "设置下一次复盘日期" else "修改日期") }
@@ -62,8 +78,15 @@ fun ReviewScreen(decisionId: Long, onDone: () -> Unit, vm: ReviewViewModel = hil
         Spacer(Modifier.weight(1f))
         PrimaryActionButton(
             "保存复盘",
-            onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate), onDone) },
+            onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
             enabled = result.isNotBlank() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
+}
+
+private fun ExpectationMatch.label(): String = when (this) {
+    ExpectationMatch.EXPECTED -> "符合预期"
+    ExpectationMatch.BETTER -> "比预期好"
+    ExpectationMatch.WORSE -> "比预期差"
+    ExpectationMatch.UNCLEAR -> "还不确定"
 }
