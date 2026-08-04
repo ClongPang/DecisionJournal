@@ -1,0 +1,83 @@
+package com.example.decisionjournal.data.local
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.decisionjournal.data.model.Choice
+import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.model.Review
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class DecisionDaoTest {
+    private lateinit var database: DecisionDatabase
+    private lateinit var dao: DecisionDao
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, DecisionDatabase::class.java).allowMainThreadQueries().build()
+        dao = database.decisionDao()
+    }
+
+    @After
+    fun tearDown() = database.close()
+
+    @Test
+    fun saveRewritesChoicesAndMapsSelectedChoice() = runBlocking {
+        val id = dao.save(Decision(question = "问题", selectedChoiceId = 1L), listOf(Choice(0, 0, "第一"), Choice(0, 0, "第二")))
+        val saved = dao.getById(id)
+        val choices = dao.observeChoices(id).first()
+        assertEquals(2, choices.size)
+        assertEquals("第二", choices[saved!!.selectedChoiceId?.let { selectedId -> choices.indexOfFirst { it.id == selectedId } } ?: -1].text)
+    }
+
+    @Test
+    fun deleteCascadeRemovesDecisionChoicesAndReviews() = runBlocking {
+        val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
+        dao.insertReview(Review(decisionId = id, result = "结果"))
+        dao.deleteCascade(id)
+        assertNull(dao.getById(id))
+        assertEquals(emptyList<Choice>(), dao.observeChoices(id).first())
+        assertEquals(emptyList<Review>(), dao.observeReviews(id).first())
+    }
+
+    @Test
+    fun reviewsAreOrderedNewestFirst() = runBlocking {
+        val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
+        dao.insertReview(Review(decisionId = id, createdAt = 100L, result = "旧"))
+        dao.insertReview(Review(decisionId = id, createdAt = 200L, result = "新"))
+        assertEquals(listOf("新", "旧"), dao.observeReviews(id).first().map { it.result })
+    }
+
+    @Test
+    fun reviewWithNextDateKeepsDecisionActiveAndReschedulesDate() = runBlocking {
+        val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
+        dao.saveReview(Review(decisionId = id, result = "第一次结果"), 2_000L, 1_000L)
+
+        val saved = dao.getById(id)
+        assertEquals(2_000L, saved?.reviewDate)
+        assertEquals(DecisionStatus.ACTIVE, saved?.status)
+        assertEquals(1, dao.observeReviews(id).first().size)
+    }
+
+    @Test
+    fun reviewWithoutNextDateEndsReminderButKeepsHistory() = runBlocking {
+        val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
+        dao.saveReview(Review(decisionId = id, result = "最终结果"), null, 1_000L)
+
+        val saved = dao.getById(id)
+        assertEquals(null, saved?.reviewDate)
+        assertEquals(DecisionStatus.REVIEWED, saved?.status)
+        assertEquals(listOf("最终结果"), dao.observeReviews(id).first().map { it.result })
+    }
+}

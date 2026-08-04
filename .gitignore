@@ -1,0 +1,34 @@
+# Android / Gradle
+.gradle/
+.gradle-user-home/
+build/
+*/build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Native and generated build outputs
+.externalNativeBuild/
+.cxx/
+captures/
+*.apk
+*.aab
+
+# Local Android SDK and emulator state used by project scripts
+.android-user/
+.android-user-home/
+
+# Kotlin and tool caches
+.kotlin/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
