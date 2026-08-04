@@ -175,11 +175,9 @@ private fun PeriodOverview(
     onClear: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PeriodCard("今日", counts.today, selectedFilter == DecisionFilter.Preset(DecisionPeriod.TODAY), onClick = { onSelect(DecisionPeriod.TODAY) }, modifier = Modifier.weight(1f))
             PeriodCard("本周", counts.week, selectedFilter == DecisionFilter.Preset(DecisionPeriod.WEEK), onClick = { onSelect(DecisionPeriod.WEEK) }, modifier = Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PeriodCard("本月", counts.month, selectedFilter == DecisionFilter.Preset(DecisionPeriod.MONTH), onClick = { onSelect(DecisionPeriod.MONTH) }, modifier = Modifier.weight(1f))
             PeriodCard("今年", counts.year, selectedFilter == DecisionFilter.Preset(DecisionPeriod.YEAR), onClick = { onSelect(DecisionPeriod.YEAR) }, modifier = Modifier.weight(1f))
         }
@@ -214,14 +212,13 @@ private fun PeriodCard(
     modifier: Modifier,
 ) {
     SoftSurfaceCard(
-        modifier = modifier,
+        modifier = modifier.height(78.dp),
         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         onClick = onClick,
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("$count", style = MaterialTheme.typography.displaySmall)
-            Text("个决定", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text("$count", style = MaterialTheme.typography.titleMedium, maxLines = 1)
         }
     }
 }
