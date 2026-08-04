@@ -55,6 +55,20 @@ class ValidationTest {
     }
 
     @Test
+    fun futureNoteCannotExceedFiveHundredCharacters() {
+        val input = DecisionInput(
+            question = "要不要换工作",
+            context = null,
+            reviewDate = null,
+            selectedChoiceIndex = null,
+            choices = listOf(ChoiceInput("接受")),
+            futureNote = "a".repeat(501),
+        )
+        assertEquals("写给未来的自己的话不能超过 500 个字符", DecisionValidation.validate(input))
+        assertNull(DecisionValidation.validate(input.copy(futureNote = "a".repeat(500))))
+    }
+
+    @Test
     fun editingReviewedDecisionKeepsReviewedStatusWhenDateIsUnchanged() {
         assertEquals(
             DecisionStatus.REVIEWED,

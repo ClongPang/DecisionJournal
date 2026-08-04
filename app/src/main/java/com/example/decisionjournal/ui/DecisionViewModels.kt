@@ -80,6 +80,7 @@ class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepo
             }
     }
     fun decision(id: Long) = repo.observe(id)
+    fun editor(id: Long) = repo.editor(id)
     fun choices(id: Long) = repo.choices(id)
 }
 
@@ -97,6 +98,8 @@ class ReviewViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
         private set
+    fun decision(id: Long) = repo.observe(id)
+    fun choices(id: Long) = repo.choices(id)
     fun save(input: ReviewInput, done: () -> Unit) = viewModelScope.launch {
         if (saveState == SaveState.Saving) return@launch
         error = null

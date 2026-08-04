@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +59,7 @@ fun DecisionDetailScreen(
     Column(
         Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
@@ -68,15 +70,22 @@ fun DecisionDetailScreen(
 
         decision?.let { d ->
             val reviewed = d.status.name == "REVIEWED"
+            val due = !reviewed && d.reviewDate != null && d.reviewDate <= System.currentTimeMillis()
+            val statusText = when {
+                reviewed -> "已回看"
+                due -> "待复盘"
+                d.reviewDate != null -> "等待回看"
+                else -> "尚未设置日期"
+            }
             SoftSurfaceCard(
                 modifier = Modifier.fillMaxWidth(),
-                containerColor = if (reviewed) MistGreen else MistBlue,
+                containerColor = if (reviewed) MistGreen else if (due) MistBlue else MaterialTheme.colorScheme.surface,
                 hero = true,
             ) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                         Text("当时的决定", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        StatusPill(if (reviewed) "已回看" else "等待回看", if (reviewed) MistGreen else MistBlue)
+                        StatusPill(statusText, if (reviewed) MistGreen else if (due) MistBlue else MaterialTheme.colorScheme.surfaceVariant)
                     }
                     Text(d.question, style = MaterialTheme.typography.headlineSmall)
                     d.context?.takeIf { it.isNotBlank() }?.let {

@@ -72,7 +72,15 @@ private fun DecisionCard(decision: Decision, status: String, onOpen: (Long) -> U
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(Icons.Rounded.CalendarToday, null, Modifier.size(17.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("一段正在等待答案的记录", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    when (status) {
+                        "待复盘" -> "该回来看看这段记录了"
+                        "已回看" -> "这是一段已经回看的记录"
+                        else -> "一段正在等待答案的记录"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
             Text(decision.question, style = MaterialTheme.typography.headlineSmall)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -7,6 +7,7 @@ object DecisionValidation {
 
     fun validate(input: DecisionInput): String? {
         if (input.question.trim().isEmpty()) return "问题不能为空"
+        if ((input.futureNote?.trim()?.length ?: 0) > 500) return "写给未来的自己的话不能超过 500 个字符"
         val choices = cleanChoices(input.choices)
         if (choices.isEmpty()) return "至少需要一个候选选项"
         if (input.selectedChoiceIndex != null && input.selectedChoiceIndex !in choices.indices) return "最终选择无效"

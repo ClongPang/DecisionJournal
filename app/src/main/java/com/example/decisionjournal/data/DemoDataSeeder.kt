@@ -1,6 +1,7 @@
 package com.example.decisionjournal.data
 
 import android.content.Context
+import androidx.core.content.edit
 import com.example.decisionjournal.data.local.DecisionDao
 import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
@@ -29,11 +30,11 @@ class DemoDataSeeder @Inject constructor(
         val existingDecisions = dao.observeAll().first()
         if (prefs.getBoolean(PREVIOUS_SEEDED_KEY, false) && existingDecisions.isNotEmpty()) {
             seedBulkWarmupData()
-            prefs.edit().putBoolean(SEEDED_KEY, true).apply()
+            prefs.edit { putBoolean(SEEDED_KEY, true) }
             return
         }
         if (existingDecisions.isNotEmpty()) {
-            prefs.edit().putBoolean(SEEDED_KEY, true).apply()
+            prefs.edit { putBoolean(SEEDED_KEY, true) }
             return
         }
 
@@ -187,7 +188,7 @@ class DemoDataSeeder @Inject constructor(
 
         seedBulkWarmupData()
 
-        prefs.edit().putBoolean(SEEDED_KEY, true).apply()
+        prefs.edit { putBoolean(SEEDED_KEY, true) }
     }
 
     /**

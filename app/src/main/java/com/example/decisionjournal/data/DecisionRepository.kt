@@ -1,12 +1,12 @@
 package com.example.decisionjournal.data
 
 import com.example.decisionjournal.data.local.DecisionDao
-import com.example.decisionjournal.data.local.DecisionDetail
 import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.ExpectationMatch
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
 data class ChoiceInput(val text: String, val benefits: List<String> = emptyList(), val concerns: List<String> = emptyList())
@@ -34,6 +34,7 @@ data class ReviewInput(
     val unexpectedFinding: String? = null,
     val nextTimeNote: String? = null,
 )
+data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
 
 class DecisionRepository @Inject constructor(
     private val dao: DecisionDao,
@@ -42,6 +43,9 @@ class DecisionRepository @Inject constructor(
     val decisions = dao.observeAll()
     fun due(now: Long = System.currentTimeMillis()) = dao.observeDue(now)
     fun observe(id: Long): Flow<Decision?> = dao.observeById(id)
+    fun editor(id: Long): Flow<DecisionEditorData?> = combine(dao.observeById(id), dao.observeChoices(id)) { decision, choices ->
+        decision?.let { DecisionEditorData(it, choices) }
+    }
     fun choices(id: Long) = dao.observeChoices(id)
     fun reviews(id: Long) = dao.observeReviews(id)
     suspend fun save(input: DecisionInput): Result<Long> = runCatching {
@@ -73,6 +77,7 @@ class DecisionRepository @Inject constructor(
     suspend fun review(input: ReviewInput): Result<Long> = runCatching {
         val validationError = ReviewValidation.validate(input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
+        require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
         val id = dao.saveReview(
             Review(
                 decisionId = input.decisionId,

@@ -3,7 +3,9 @@ package com.example.decisionjournal.data
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -17,6 +19,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import com.example.decisionjournal.MainActivity
 
 private const val CHANNEL_ID = "review-reminders"
 private const val WORK_PREFIX = "decision-review-"
@@ -48,6 +51,14 @@ class ReviewReminderWorker(context: Context, params: WorkerParameters) : Worker(
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("回看提醒")
             .setContentText("有一个决定到了复盘时间")
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    applicationContext,
+                    id,
+                    Intent(applicationContext, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()

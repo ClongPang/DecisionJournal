@@ -3,6 +3,7 @@
     <application
         android:name=".DecisionJournalApplication"
         android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
         android:label="回看"
         android:supportsRtl="true"
         android:theme="@style/Theme.DecisionJournal">

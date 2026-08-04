@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -57,7 +58,11 @@ fun DecisionJournalApp() {
             NavigationBarItem(route == "mine", { nav.navigate("mine") { launchSingleTop = true } }, { Icon(Icons.Rounded.PersonOutline, null, Modifier.size(22.dp)) }, label = { Text("我的") }, colors = navColors)
         }
     }) { padding ->
-        NavHost(navController = nav, startDestination = "home", modifier = Modifier.padding(padding)) {
+        NavHost(
+            navController = nav,
+            startDestination = "home",
+            modifier = Modifier.padding(padding).background(MaterialTheme.colorScheme.background),
+        ) {
             composable("home") { HomeScreen({ nav.navigate("create") }, { nav.navigate("detail/$it") }) }
             composable("decisions") { MyDecisionsScreen(onOpen = { nav.navigate("detail/$it") }, onCreate = { nav.navigate("create") }, showStats = false) }
             composable("mine") { MyDecisionsScreen(onOpen = { nav.navigate("detail/$it") }, onCreate = { nav.navigate("create") }, showStats = true) }
