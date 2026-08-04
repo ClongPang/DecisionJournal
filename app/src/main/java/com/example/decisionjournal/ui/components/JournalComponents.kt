@@ -10,15 +10,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.decisionjournal.ui.theme.JournalDimens
+import com.example.decisionjournal.ui.theme.CardWhite
+import com.example.decisionjournal.ui.theme.Hairline
 
 @Composable
 fun JournalTopBar(
@@ -32,9 +40,16 @@ fun JournalTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.headlineSmall)
+                subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
         }
         trailing?.invoke()
     }
@@ -44,6 +59,7 @@ fun JournalTopBar(
 fun SoftSurfaceCard(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surface,
+    hero: Boolean = false,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -51,11 +67,11 @@ fun SoftSurfaceCard(
         onClick = onClick ?: {},
         enabled = onClick != null,
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
+        shape = if (hero) MaterialTheme.shapes.large else MaterialTheme.shapes.medium,
         color = containerColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         content = content,
     )
 }
@@ -72,8 +88,65 @@ fun PrimaryActionButton(
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(JournalDimens.buttonHeight),
         shape = MaterialTheme.shapes.medium,
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-    ) { Text(text) }
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) { Text(text, style = MaterialTheme.typography.titleMedium) }
+}
+
+@Composable
+fun JournalTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: (@Composable (() -> Unit))? = null,
+    placeholder: (@Composable (() -> Unit))? = null,
+    minLines: Int = 1,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        label = label,
+        placeholder = placeholder,
+        minLines = minLines,
+        maxLines = maxLines,
+        shape = MaterialTheme.shapes.small,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = CardWhite,
+            unfocusedContainerColor = CardWhite.copy(alpha = 0.62f),
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = Hairline,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            cursorColor = MaterialTheme.colorScheme.primary,
+        ),
+        textStyle = MaterialTheme.typography.bodyLarge,
+    )
+}
+
+@Composable
+fun JournalErrorText(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("需要注意", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+            Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+        }
+    }
 }
 
 @Composable
@@ -88,14 +161,19 @@ fun EmptyJournalState(message: String, actionText: String, onAction: () -> Unit)
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("—", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.headlineSmall)
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         PrimaryActionButton(actionText, onAction, Modifier.fillMaxWidth(0.72f))
     }
 }
 
 @Composable
 fun StatusPill(text: String, color: Color = MaterialTheme.colorScheme.primaryContainer) {
-    Surface(shape = MaterialTheme.shapes.small, color = color) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
+    ) {
         Text(text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium)
     }
 }

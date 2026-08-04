@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,14 +15,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -153,8 +149,13 @@ fun MyDecisionsScreen(
 
         if (showStats) {
             Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
+            Text(
+                "记录是给未来的线索，不是给现在的评分。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             calculateSelfInsights(decisions).forEach { insight ->
-                SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
+                SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(insight.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(insight.description, style = MaterialTheme.typography.titleMedium)
@@ -202,6 +203,7 @@ private fun PeriodOverview(
     onClear: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("按时间回看", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PeriodCard("今日", counts.today, selectedFilter == DecisionFilter.Preset(DecisionPeriod.TODAY), onClick = { onSelect(DecisionPeriod.TODAY) }, modifier = Modifier.weight(1f))
             PeriodCard("本周", counts.week, selectedFilter == DecisionFilter.Preset(DecisionPeriod.WEEK), onClick = { onSelect(DecisionPeriod.WEEK) }, modifier = Modifier.weight(1f))
@@ -245,7 +247,7 @@ private fun PeriodCard(
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            Text("$count", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+            Text("$count", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         }
     }
 }
@@ -260,7 +262,7 @@ private fun DecisionPeriod.label(): String = when (this) {
 @Composable
 private fun Overview(completed: Int, caredAbout: String, due: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
+        SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true) {
             Row(
                 Modifier.fillMaxWidth().padding(20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -294,17 +296,15 @@ private fun SmallInsightCard(title: String, value: String, icon: androidx.compos
 
 @Composable
 private fun TimelineContainer(decisions: List<Decision>, now: Long, onOpen: (Long) -> Unit) {
-    SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            decisions.forEachIndexed { index, decision ->
-                TimelineItem(
-                    decision = decision,
-                    now = now,
-                    isFirst = index == 0,
-                    isLast = index == decisions.lastIndex,
-                    onOpen = onOpen,
-                )
-            }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        decisions.forEachIndexed { index, decision ->
+            TimelineItem(
+                decision = decision,
+                now = now,
+                isFirst = index == 0,
+                isLast = index == decisions.lastIndex,
+                onOpen = onOpen,
+            )
         }
     }
 }
@@ -329,32 +329,23 @@ private fun TimelineItem(
 
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.Top) {
         TimelineRail(nodeColor, isFirst, isLast, Modifier.fillMaxHeight())
-        Column(Modifier.weight(1f)) {
-            Surface(
-                onClick = { onOpen(decision.id) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RectangleShape,
-                color = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(decision.question, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(timelineDate),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        StatusPill(statusText, if (due) MistBlue else if (reviewed) MistGreen else MaterialTheme.colorScheme.surfaceVariant)
-                    }
-                    Icon(Icons.Rounded.ArrowForwardIos, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.height(15.dp))
+        SoftSurfaceCard(
+            modifier = Modifier.weight(1f),
+            containerColor = if (due) MistBlue.copy(alpha = 0.42f) else MaterialTheme.colorScheme.surface,
+            onClick = { onOpen(decision.id) },
+        ) {
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(timelineDate),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.height(14.dp))
                 }
+                Text(decision.question, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                StatusPill(statusText, if (due) MistBlue else if (reviewed) MistGreen else MaterialTheme.colorScheme.surfaceVariant)
             }
-            if (!isLast) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
         }
     }
 }

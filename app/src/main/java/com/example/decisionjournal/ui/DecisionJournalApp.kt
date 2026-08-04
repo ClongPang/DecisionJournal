@@ -1,7 +1,10 @@
 package com.example.decisionjournal.ui
 
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Home
@@ -16,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.decisionjournal.ui.screens.*
 import com.example.decisionjournal.ui.theme.Ink
+import com.example.decisionjournal.ui.theme.Hairline
 import com.example.decisionjournal.ui.theme.MistGreen
 
 @Composable
@@ -34,7 +37,14 @@ fun DecisionJournalApp() {
     val route = backStack?.destination?.route.orEmpty()
     val showNavigation = route in setOf("home", "decisions", "mine")
     Scaffold(bottomBar = {
-        if (showNavigation) NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
+        if (showNavigation) NavigationBar(
+            modifier = Modifier
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, Hairline.copy(alpha = 0.75f), RoundedCornerShape(24.dp)),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+        ) {
             val navColors = androidx.compose.material3.NavigationBarItemDefaults.colors(
                 indicatorColor = MistGreen,
                 selectedIconColor = Ink,

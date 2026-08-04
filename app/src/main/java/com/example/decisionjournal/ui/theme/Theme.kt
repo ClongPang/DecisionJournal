@@ -5,10 +5,10 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
@@ -30,14 +30,14 @@ private val Colors = lightColorScheme(
 
 object JournalDimens {
     val pageHorizontal = 20.dp
-    val pageVertical = 18.dp
-    val sectionSpacing = 24.dp
-    val cardSpacing = 12.dp
+    val pageVertical = 20.dp
+    val sectionSpacing = 28.dp
+    val cardSpacing = 14.dp
     val cardPadding = 18.dp
-    val buttonHeight = 54.dp
-    val smallRadius = 12.dp
+    val buttonHeight = 52.dp
+    val smallRadius = 10.dp
     val cardRadius = 18.dp
-    val heroRadius = 24.dp
+    val heroRadius = 28.dp
 }
 
 @Composable
@@ -45,17 +45,30 @@ fun DecisionJournalTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = Colors,
         shapes = Shapes(
-            small = RoundedCornerShape(12.dp),
-            medium = RoundedCornerShape(16.dp),
-            large = RoundedCornerShape(24.dp),
+            small = RoundedCornerShape(JournalDimens.smallRadius),
+            medium = RoundedCornerShape(JournalDimens.cardRadius),
+            large = RoundedCornerShape(JournalDimens.heroRadius),
         ),
         typography = androidx.compose.material3.Typography(
-            displaySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 39.sp),
-            headlineSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 25.sp, lineHeight = 32.sp),
-            titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp),
-            bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 16.sp, lineHeight = 24.sp),
-            bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 20.sp),
-            labelMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+            displaySmall = TextStyle(
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                fontSize = 34.sp,
+                lineHeight = 43.sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            headlineSmall = TextStyle(
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                fontSize = 27.sp,
+                lineHeight = 35.sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 23.sp),
+            bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 16.sp, lineHeight = 25.sp),
+            bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 21.sp),
+            bodySmall = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 12.sp, lineHeight = 18.sp),
+            labelMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 17.sp),
         ),
         content = content,
     )
