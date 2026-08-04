@@ -14,7 +14,7 @@ Android 原生项目骨架，基于 `Kotlin + Jetpack Compose + Material 3 + Roo
 - Room `Decision` / `Choice` 数据模型与 DAO
 - Hilt 数据库依赖注入
 - DataStore、WorkManager 依赖预留
-- Debug 构建首次启动自动加载完整体验预热数据；Release 构建保持空数据
+- Debug 和 Release 构建均从空数据库启动；演示数据仅可作为开发/测试 fixture 显式加载
 
 ## 产品与设计方向
 
@@ -35,11 +35,9 @@ Android 原生项目骨架，基于 `Kotlin + Jetpack Compose + Material 3 + Roo
 - Release 构建不写入示例数据；Debug 预热数据只在本地数据库为空时生成。
 - 不包含账号、云同步、远程 AI 分析或自动替用户决策的功能。
 
-### Debug 数据预热
+### 演示数据
 
-Debug 构建首次启动时会在本地生成 50 条以上、覆盖以下场景的示例数据：已回看、多次复盘、未来待复盘、已到期待复盘、无复盘日期、未选择最终方案、不同决定日期和统计洞察。预热器只在数据库为空时执行，不会覆盖已有用户数据；上一版 Debug 预热数据会自动补充扩展数据。
-
-如需重新查看预热数据，请清除应用数据后重新启动 Debug APK；该操作会删除设备上的本地决策记录。
+应用不会在首次启动时自动写入演示数据，以便可靠验收空状态和保护用户本地记录。`DemoDataSeeder` 仅保留给开发/测试场景显式调用；不要在正式启动路径调用它。
 
 ## 打开项目
 

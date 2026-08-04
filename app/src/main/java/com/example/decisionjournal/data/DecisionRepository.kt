@@ -66,6 +66,7 @@ class DecisionRepository @Inject constructor(
         val validationError = DecisionValidation.validate(input)
         require(validationError == null) { validationError ?: "决策内容无效" }
         val cleanChoices = DecisionValidation.cleanChoices(input.choices)
+        val selectedChoiceIndex = DecisionValidation.normalizedSelectedChoiceIndex(input.choices, input.selectedChoiceIndex)
         val previous = if (input.id == 0L) null else dao.getById(input.id)
         require(input.id == 0L || previous != null) { "这条决定不存在或已被删除" }
         require(DecisionValidation.validateReviewDate(previous?.reviewDate, input.reviewDate) == null) {
@@ -86,7 +87,7 @@ class DecisionRepository @Inject constructor(
             decisionDate = input.decisionDate,
             reviewDate = input.reviewDate,
             status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
-            selectedChoiceId = input.selectedChoiceIndex?.toLong(),
+            selectedChoiceId = selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
         val warning = capture { reminderScheduler.scheduleOrCancel(id, input.reviewDate) }

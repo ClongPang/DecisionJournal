@@ -3,6 +3,7 @@ package com.example.decisionjournal.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.decisionjournal.data.DecisionInput
+import com.example.decisionjournal.data.DecisionValidation
 import com.example.decisionjournal.data.DecisionRepository
 import com.example.decisionjournal.data.ReviewInput
 import com.example.decisionjournal.data.SaveOutcome
@@ -14,6 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
@@ -39,6 +42,12 @@ sealed interface SaveState {
     data object Saving : SaveState
     data class Success(val reminderWarning: String? = null) : SaveState
     data class Error(val message: String) : SaveState
+}
+
+sealed interface DecisionEditorState {
+    data object Loading : DecisionEditorState
+    data object Missing : DecisionEditorState
+    data class Content(val data: com.example.decisionjournal.data.DecisionEditorData) : DecisionEditorState
 }
 
 @HiltViewModel
@@ -83,6 +92,15 @@ class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepo
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
         private set
+
+    /** Do not ask for optional notification permission when the form itself is invalid. */
+    fun validateBeforePermissionRequest(input: DecisionInput): Boolean {
+        val message = DecisionValidation.validate(input) ?: return true
+        error = message
+        saveState = SaveState.Error(message)
+        return false
+    }
+
     fun save(input: DecisionInput, onSaved: (SaveOutcome) -> Unit) = viewModelScope.launch {
         if (saveState == SaveState.Saving) return@launch
         error = null
@@ -100,6 +118,8 @@ class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepo
     }
     fun decision(id: Long) = repo.observe(id)
     fun editor(id: Long) = repo.editor(id)
+        .map { data -> data?.let(DecisionEditorState::Content) ?: DecisionEditorState.Missing }
+        .onStart { emit(DecisionEditorState.Loading) }
     fun choices(id: Long) = repo.choices(id)
 }
 

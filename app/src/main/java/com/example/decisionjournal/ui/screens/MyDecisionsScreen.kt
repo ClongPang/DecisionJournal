@@ -24,9 +24,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,8 +46,10 @@ import com.example.decisionjournal.ui.DecisionsViewModel
 import com.example.decisionjournal.ui.CustomDateRange
 import com.example.decisionjournal.ui.DecisionFilter
 import com.example.decisionjournal.ui.DecisionPeriod
+import com.example.decisionjournal.ui.INITIAL_DECISION_PAGE_SIZE
 import com.example.decisionjournal.ui.PeriodCounts
 import com.example.decisionjournal.ui.calculateSelfInsights
+import com.example.decisionjournal.ui.nextDecisionPageSize
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.SectionHeader
@@ -108,7 +113,12 @@ fun MyDecisionsScreen(
         ).apply { datePicker.maxDate = System.currentTimeMillis() }.show()
     }
 
-    val timelineDecisions = if (showStats) decisions else filteredDecisions
+    val timelineSource = if (showStats) decisions else filteredDecisions
+    var visibleDecisionCount by rememberSaveable(showStats, selectedFilter) { mutableIntStateOf(INITIAL_DECISION_PAGE_SIZE) }
+    LaunchedEffect(timelineSource.size) {
+        visibleDecisionCount = visibleDecisionCount.coerceAtMost(timelineSource.size.coerceAtLeast(INITIAL_DECISION_PAGE_SIZE))
+    }
+    val timelineDecisions = timelineSource.take(visibleDecisionCount)
     val insights = remember(decisions) { calculateSelfInsights(decisions) }
     val timelineTitle = if (showStats) "决策时间线" else when (val filter = selectedFilter) {
         DecisionFilter.All -> "全部记录"
@@ -169,6 +179,14 @@ fun MyDecisionsScreen(
                 isLast = index == timelineDecisions.lastIndex,
                 onOpen = onOpen,
             )
+        }
+        if (timelineDecisions.size < timelineSource.size) {
+            item {
+                TextButton(
+                    onClick = { visibleDecisionCount = nextDecisionPageSize(visibleDecisionCount, timelineSource.size) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("加载更多（${timelineDecisions.size}/${timelineSource.size}）") }
+            }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }

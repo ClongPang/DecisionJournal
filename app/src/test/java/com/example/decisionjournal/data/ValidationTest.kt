@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import com.example.decisionjournal.data.model.DecisionStatus
+import java.time.LocalDate
+import java.time.ZoneId
 
 class ValidationTest {
     @Test
@@ -22,6 +24,26 @@ class ValidationTest {
     fun selectedChoiceMustBeInCleanedChoices() {
         val input = DecisionInput(question = "要不要换工作", context = null, reviewDate = null, selectedChoiceIndex = 2, choices = listOf(ChoiceInput("接受"), ChoiceInput("拒绝")))
         assertEquals("最终选择无效", DecisionValidation.validate(input))
+    }
+
+    @Test
+    fun selectingABlankChoiceIsRejectedInsteadOfSelectingANeighborAfterCleaning() {
+        val input = DecisionInput(
+            question = "要不要换工作",
+            context = null,
+            reviewDate = null,
+            selectedChoiceIndex = 1,
+            choices = listOf(ChoiceInput("接受"), ChoiceInput("  "), ChoiceInput("拒绝")),
+        )
+
+        assertEquals("最终选择无效", DecisionValidation.validate(input))
+    }
+
+    @Test
+    fun selectionIsRemappedWhenBlankChoicesPrecedeTheSelectedChoice() {
+        val choices = listOf(ChoiceInput("  "), ChoiceInput("接受"), ChoiceInput("拒绝"))
+
+        assertEquals(0, DecisionValidation.normalizedSelectedChoiceIndex(choices, 1))
     }
 
     @Test
@@ -103,5 +125,20 @@ class ValidationTest {
         val input = ReviewInput(decisionId = 1L, result = "结果", satisfaction = null, nextReviewDate = 999L)
         assertEquals("下一次复盘日期不能早于今天", ReviewValidation.validate(input, todayStart = 1_000L))
         assertNull(ReviewValidation.validate(input.copy(nextReviewDate = 1_000L), todayStart = 1_000L))
+    }
+
+    @Test
+    fun decisionDateCannotBeAfterToday() {
+        val tomorrow = LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val input = DecisionInput(
+            question = "要不要换工作",
+            context = null,
+            reviewDate = null,
+            selectedChoiceIndex = null,
+            choices = listOf(ChoiceInput("接受")),
+            decisionDate = tomorrow,
+        )
+
+        assertEquals("决定日期不能晚于今天", DecisionValidation.validate(input))
     }
 }

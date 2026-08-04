@@ -47,6 +47,7 @@ import com.example.decisionjournal.data.ChoiceInput
 import com.example.decisionjournal.data.DecisionInput
 import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.ui.CreateDecisionViewModel
+import com.example.decisionjournal.ui.DecisionEditorState
 import com.example.decisionjournal.ui.SaveState
 import com.example.decisionjournal.ui.components.JournalErrorText
 import com.example.decisionjournal.ui.components.JournalTopBar
@@ -65,7 +66,8 @@ private fun lines(value: String): List<String> = value.split(',', '，', '\n').m
 
 @Composable
 fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
-    val editor by (decisionId?.let { vm.editor(it) } ?: flowOf(null)).collectAsStateWithLifecycle(null)
+    val editorState by (decisionId?.let { vm.editor(it) } ?: flowOf<DecisionEditorState>(DecisionEditorState.Loading)).collectAsStateWithLifecycle(DecisionEditorState.Loading)
+    val editor = (editorState as? DecisionEditorState.Content)?.data
     var step by remember { mutableStateOf(0) }
     var question by remember { mutableStateOf("") }
     var contextText by remember { mutableStateOf("") }
@@ -93,9 +95,10 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
     }
 
     LaunchedEffect(editor, decisionId) {
-        if (!initialized && editor != null) {
-            val decision = editor!!.decision
-            val loadedChoices = editor!!.choices
+        val editorData = editor
+        if (!initialized && editorData != null) {
+            val decision = editorData.decision
+            val loadedChoices = editorData.choices
             question = decision.question
             contextText = decision.context.orEmpty()
             benefitsText = decision.benefits.joinToString("，")
@@ -111,8 +114,28 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
         }
     }
 
+    if (decisionId != null && editorState is DecisionEditorState.Loading) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+            Text("正在加载决定…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+    if (decisionId != null && editorState is DecisionEditorState.Missing) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+            SoftSurfaceCard(modifier = Modifier.padding(JournalDimens.pageHorizontal)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("找不到这条决定", style = MaterialTheme.typography.titleMedium)
+                    Text("它可能已被删除，无法继续编辑。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = onBack) { Text("返回") }
+                }
+            }
+        }
+        return
+    }
+
     fun save() {
         val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate)
+        if (!vm.validateBeforePermissionRequest(input)) return
         val needsPermission = Build.VERSION.SDK_INT >= 33 && reviewDate != null && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             pendingInput = input

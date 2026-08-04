@@ -7,12 +7,21 @@ import java.time.ZoneId
 object DecisionValidation {
     fun cleanChoices(choices: List<ChoiceInput>): List<ChoiceInput> = choices.map { it.copy(text = it.text.trim(), benefits = it.benefits.map(String::trim).filter(String::isNotEmpty), concerns = it.concerns.map(String::trim).filter(String::isNotEmpty)) }.filter { it.text.isNotEmpty() }
 
+    /** Translates a selection from the submitted list to the list after blank choices are removed. */
+    fun normalizedSelectedChoiceIndex(choices: List<ChoiceInput>, selectedChoiceIndex: Int?): Int? =
+        selectedChoiceIndex?.let { selected ->
+            choices.take(selected + 1).count { it.text.trim().isNotEmpty() } - 1
+        }
+
     fun validate(input: DecisionInput): String? {
         if (input.question.trim().isEmpty()) return "问题不能为空"
         if ((input.futureNote?.trim()?.length ?: 0) > 500) return "写给未来的自己的话不能超过 500 个字符"
-        val choices = cleanChoices(input.choices)
-        if (choices.isEmpty()) return "至少需要一个候选选项"
-        if (input.selectedChoiceIndex != null && input.selectedChoiceIndex !in choices.indices) return "最终选择无效"
+        if (input.decisionDate >= tomorrowStart()) return "决定日期不能晚于今天"
+        val selected = input.selectedChoiceIndex
+        if (selected != null && (selected !in input.choices.indices || input.choices[selected].text.trim().isEmpty())) {
+            return "最终选择无效"
+        }
+        if (cleanChoices(input.choices).isEmpty()) return "至少需要一个候选选项"
         if (input.confidence != null && input.confidence !in 1..5) return "判断信心必须为 1 至 5"
         return null
     }
@@ -27,6 +36,9 @@ object DecisionValidation {
 
     private fun todayStart(): Long =
         LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    private fun tomorrowStart(): Long =
+        LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 }
 
 object ReviewValidation {
