@@ -66,6 +66,7 @@ fun DecisionDetailScreen(
     onReview: () -> Unit,
     onEdit: () -> Unit,
     onBack: () -> Unit,
+    onReturnHome: () -> Unit = onBack,
     vm: DetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -87,7 +88,7 @@ fun DecisionDetailScreen(
             return
         }
         DecisionLoadState.Missing -> {
-            DecisionStatePage("回看这一刻", "这条决定可能已被删除，或链接已经失效。", onBack, missing = true)
+            DecisionStatePage("回看这一刻", "这条决定可能已被删除，或链接已经失效。", onBack, onReturnHome, missing = true)
             return
         }
         is DecisionLoadState.Content -> state.decision
@@ -119,10 +120,11 @@ fun DecisionDetailScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Button(
+                    OutlinedButton(
                         onClick = { vm.retryReminder(id) { showReminderWarning = false } },
                         enabled = !vm.reminderRetrying,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        border = BorderStroke(1.dp, MutedTerracotta.copy(alpha = 0.68f)),
                     ) { Text(if (vm.reminderRetrying) "正在安排…" else "重新安排提醒") }
                     TextButton(onClick = ::openNotificationSettings) { Text("打开通知设置") }
                 }
@@ -252,7 +254,13 @@ fun DecisionDetailScreen(
 }
 
 @Composable
-private fun DecisionStatePage(title: String, message: String, onBack: () -> Unit, missing: Boolean = false) {
+private fun DecisionStatePage(
+    title: String,
+    message: String,
+    onBack: () -> Unit,
+    onReturnHome: () -> Unit = onBack,
+    missing: Boolean = false,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -265,7 +273,7 @@ private fun DecisionStatePage(title: String, message: String, onBack: () -> Unit
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (missing) "找不到这条决定" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (missing) TextButton(onClick = onBack) { Text("回到今天") }
+                if (missing) TextButton(onClick = onReturnHome) { Text("回到今天") }
             }
         }
     }

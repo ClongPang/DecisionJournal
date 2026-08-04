@@ -62,7 +62,13 @@ private val expectationMatchSaver: Saver<ExpectationMatch?, String> = Saver(
 )
 
 @Composable
-fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: ReviewViewModel = hiltViewModel()) {
+fun ReviewScreen(
+    decisionId: Long,
+    onDone: (SaveOutcome) -> Unit,
+    onBack: () -> Unit,
+    onReturnHome: () -> Unit = onBack,
+    vm: ReviewViewModel = hiltViewModel(),
+) {
     var result by rememberSaveable { mutableStateOf("") }
     var satisfaction by rememberSaveable { mutableStateOf("") }
     var nextReviewDate by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -101,7 +107,7 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
             return
         }
         DecisionLoadState.Missing -> {
-            ReviewStatePage("这条决定可能已被删除，无法记录复盘。", onBack, missing = true)
+            ReviewStatePage("这条决定可能已被删除，无法记录复盘。", onBack, onReturnHome, missing = true)
             return
         }
         is DecisionLoadState.Content -> state.decision
@@ -242,7 +248,12 @@ fun ReviewScreen(decisionId: Long, onDone: (SaveOutcome) -> Unit, onBack: () -> 
 }
 
 @Composable
-private fun ReviewStatePage(message: String, onBack: () -> Unit, missing: Boolean = false) {
+private fun ReviewStatePage(
+    message: String,
+    onBack: () -> Unit,
+    onReturnHome: () -> Unit = onBack,
+    missing: Boolean = false,
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -255,7 +266,7 @@ private fun ReviewStatePage(message: String, onBack: () -> Unit, missing: Boolea
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (missing) "无法记录复盘" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                if (missing) TextButton(onClick = onBack) { Text("回到今天") }
+                if (missing) TextButton(onClick = onReturnHome) { Text("回到今天") }
             }
         }
     }

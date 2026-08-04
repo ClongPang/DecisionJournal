@@ -244,7 +244,7 @@ fun EmptyJournalState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            maxLines = 2,
+            maxLines = 3,
         )
         if (primaryAction) {
             PrimaryActionButton(actionText, onAction, Modifier.fillMaxWidth(0.72f))

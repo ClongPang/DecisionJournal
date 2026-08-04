@@ -41,12 +41,15 @@ import com.example.decisionjournal.ui.theme.Hairline
 @Composable
 fun DecisionJournalApp(initialDecisionId: Long? = null) {
     val nav = rememberNavController()
-    fun navigateBackOrHome() {
-        if (nav.popBackStack()) return
+    fun navigateHome() {
         nav.navigate("home") {
             popUpTo(nav.graph.startDestinationId) { inclusive = true }
             launchSingleTop = true
         }
+    }
+    fun navigateBackOrHome() {
+        if (nav.popBackStack()) return
+        navigateHome()
     }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route.orEmpty()
@@ -131,6 +134,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                         nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}") { popUpTo("home") }
                     },
                     onBack = ::navigateBackOrHome,
+                    onReturnHome = ::navigateHome,
                 )
             }
             composable(
@@ -150,6 +154,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     onReview = { nav.navigate("review/$id") },
                     onEdit = { nav.navigate("create?decisionId=$id") },
                     onBack = ::navigateBackOrHome,
+                    onReturnHome = ::navigateHome,
                 )
             }
             composable("review/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
@@ -161,6 +166,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                         nav.popBackStack()
                     },
                     onBack = ::navigateBackOrHome,
+                    onReturnHome = ::navigateHome,
                 )
             }
         }

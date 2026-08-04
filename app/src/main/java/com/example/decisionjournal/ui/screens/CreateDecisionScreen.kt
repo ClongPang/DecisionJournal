@@ -100,7 +100,13 @@ private val choiceListSaver: Saver<List<ChoiceInput>, List<String>> = Saver(
 )
 
 @Composable
-fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBack: () -> Unit, vm: CreateDecisionViewModel = hiltViewModel()) {
+fun CreateDecisionScreen(
+    decisionId: Long?,
+    onDone: (SaveOutcome) -> Unit,
+    onBack: () -> Unit,
+    onReturnHome: () -> Unit = onBack,
+    vm: CreateDecisionViewModel = hiltViewModel(),
+) {
     val editorState by (decisionId?.let { vm.editor(it) } ?: flowOf<DecisionEditorState>(DecisionEditorState.Loading)).collectAsStateWithLifecycle(DecisionEditorState.Loading)
     val editor = (editorState as? DecisionEditorState.Content)?.data
     var step by rememberSaveable { mutableStateOf(0) }
@@ -151,8 +157,20 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
     }
 
     if (decisionId != null && editorState is DecisionEditorState.Loading) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-            Text("正在加载决定…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+            verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
+        ) {
+            JournalTopBar(title = "编辑决定", onBack = onBack)
+            SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("正在加载", style = MaterialTheme.typography.titleMedium)
+                    Text("正在打开这段记录…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
         return
     }
@@ -169,7 +187,7 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("找不到这条决定", style = MaterialTheme.typography.titleMedium)
                     Text("它可能已被删除，无法继续编辑。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onBack) { Text("回到今天") }
+                    TextButton(onClick = onReturnHome) { Text("回到今天") }
                 }
             }
         }
@@ -265,11 +283,14 @@ fun CreateDecisionScreen(decisionId: Long?, onDone: (SaveOutcome) -> Unit, onBac
             { _, year, month, day ->
                 decisionDate = LocalDate.of(year, month + 1, day)
                     .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                vm.clearError()
             },
             date.year,
             date.monthValue - 1,
             date.dayOfMonth,
-        ).show()
+        ).apply {
+            datePicker.maxDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }.show()
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
