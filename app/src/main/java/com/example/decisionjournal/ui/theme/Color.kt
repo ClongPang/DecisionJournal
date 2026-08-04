@@ -2,13 +2,16 @@ package com.example.decisionjournal.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Ink = Color(0xFF1D1D1F)
-val SecondaryInk = Color(0xFF6E6E73)
-val AppBackground = Color(0xFFF8F8F6)
-val CardWhite = Color(0xFFFFFFFF)
-val BlueAccent = Color(0xFF7199B7)
-val SoftSage = Color(0xFFB8C0A9)
-val SoftSand = Color(0xFFEDE4D7)
-val MistBlue = Color(0xFFDCEAF3)
-val MistGreen = Color(0xFFE9ECDD)
-val MistSand = Color(0xFFF3E8DA)
+// Quiet Reflection palette: warm paper, ink, muted blue and restrained natural tones.
+val Ink = Color(0xFF202528)
+val SecondaryInk = Color(0xFF77736C)
+val AppBackground = Color(0xFFF6F3ED)
+val CardWhite = Color(0xFFFFFCF7)
+val BlueAccent = Color(0xFF5B8095)
+val SoftSage = Color(0xFF9DA68D)
+val SoftSand = Color(0xFFE9DDD0)
+val MutedTerracotta = Color(0xFF9A6A5B)
+val MistBlue = Color(0xFFDCE8ED)
+val MistGreen = Color(0xFFE4E8D9)
+val MistSand = Color(0xFFF0E5D7)
+val Hairline = Color(0xFFDED8CF)

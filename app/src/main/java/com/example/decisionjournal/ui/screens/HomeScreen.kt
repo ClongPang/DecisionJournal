@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarToday
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,13 +27,14 @@ import com.example.decisionjournal.ui.HomeViewModel
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.PrimaryActionButton
 import com.example.decisionjournal.ui.components.SoftSurfaceCard
+import com.example.decisionjournal.ui.components.StatusPill
 import com.example.decisionjournal.ui.theme.JournalDimens
 import com.example.decisionjournal.ui.theme.MistBlue
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val homeDate = DateTimeFormatter.ofPattern("M月d日 E")
+private val homeDate = DateTimeFormatter.ofPattern("M月d日")
 
 @Composable
 fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel = hiltViewModel()) {
@@ -48,9 +48,8 @@ fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel =
         JournalTopBar(
             title = "回看",
             subtitle = Instant.now().atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate),
-            trailing = { Text("···", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) },
         )
-        Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 8.dp))
+        Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 18.dp))
         when {
             due.isNotEmpty() -> {
                 Text("最近的决定", style = MaterialTheme.typography.titleMedium)
@@ -60,7 +59,7 @@ fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel =
                 Text("最近的决定", style = MaterialTheme.typography.titleMedium)
                 DecisionCard(recent, if (recent.status.name == "REVIEWED") "已回看" else "等待回看", onOpen)
             }
-            else -> Text("今天没有待复盘的决定。", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> Text("今天没有待复盘的决定。\n先把此刻的想法留下来。", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.weight(1f))
         PrimaryActionButton("记录一个决定", onCreate)
@@ -69,22 +68,25 @@ fun HomeScreen(onCreate: () -> Unit, onOpen: (Long) -> Unit, vm: HomeViewModel =
 
 @Composable
 private fun DecisionCard(decision: Decision, status: String, onOpen: (Long) -> Unit) {
-    SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, onClick = { onOpen(decision.id) }) {
+    SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue, hero = true, onClick = { onOpen(decision.id) }) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(Icons.Rounded.CalendarToday, null, Modifier.size(17.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("最近的决定", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                Text("一段正在等待答案的记录", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
             }
             Text(decision.question, style = MaterialTheme.typography.headlineSmall)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Rounded.Schedule, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    "决定于 " + Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate) +
-                        if (status == "待复盘") " · 等待回看" else " · $status",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "决定于 " + Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(if (status == "待复盘") "还有时间，记得回来看看" else "这段记录已经被回看", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
             }
+            StatusPill(status, if (status == "待复盘") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer)
         }
     }
 }
