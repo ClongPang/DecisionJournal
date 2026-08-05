@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +54,7 @@ fun HomeScreen(
     onCreate: () -> Unit,
     onOpen: (Long) -> Unit,
     onViewDue: () -> Unit,
+    onReview: (Long) -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     val listState by vm.listState.collectAsStateWithLifecycle()
@@ -67,7 +69,7 @@ fun HomeScreen(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ArchiveKicker("今日回看")
-            Text(Instant.now().atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 12.dp))
         Text("把当时的判断留住，等生活给出答案。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -85,7 +87,7 @@ fun HomeScreen(
                 val featured = due.firstOrNull() ?: decisions.firstOrNull()
                 val featuredStatus = featured?.let { decisionStatusLabel(it, now) } ?: "待回看"
                 featured?.let { decision ->
-                    ArchiveCoverCard(decision, featuredStatus, onOpen)
+                    ArchiveCoverCard(decision, featuredStatus, onOpen, onReview)
                     if (due.size > 1) {
                         Text("接下来还要回看（还有 ${due.size - 1} 条）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = onViewDue, modifier = Modifier.align(Alignment.End)) {
@@ -128,7 +130,8 @@ private fun HomeStatusCard(message: String, actionText: String? = null, onAction
 }
 
 @Composable
-private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) -> Unit) {
+private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) -> Unit, onReview: (Long) -> Unit) {
+    val due = status == "待回看"
     NarrativeCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onOpen(decision.id) },
@@ -137,21 +140,30 @@ private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) 
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (status == "待回看") Icons.Rounded.Schedule else Icons.Rounded.AutoStories, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Text(if (status == "待回看") "该回来看看了" else "最近的一段记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(if (due) Icons.Rounded.Schedule else Icons.Rounded.AutoStories, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(if (due) "该回来看看了" else "最近的一段记录", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 StatusPill(status, if (status == "已回看") MistGreen else MaterialTheme.colorScheme.surface)
             }
             Text(decision.question, style = MaterialTheme.typography.headlineSmall)
             decision.context?.takeIf { it.isNotBlank() }?.let { Text(it, maxLines = 2, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Spacer(Modifier.height(22.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Rounded.CalendarToday, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(
-                    if (status == "待回看") "现在就可以记录结果" else "决定于 ${formatDecisionDate(decision.decisionDate, weekDay = true)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            if (due) {
+                // Due cards get a direct action so “review this now” is one tap, not two.
+                OutlinedButton(
+                    onClick = { onReview(decision.id) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("现在回看") }
+            } else {
+                Spacer(Modifier.height(22.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Rounded.CalendarToday, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "决定于 ${formatDecisionDate(decision.decisionDate, weekDay = true)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

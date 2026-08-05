@@ -114,6 +114,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     onCreate = { nav.navigate("create") },
                     onOpen = { nav.navigate("detail/$it") },
                     onViewDue = { nav.navigate("decisions?filter=due") },
+                    onReview = { nav.navigate("review/$it") },
                 )
             }
             composable(
@@ -144,7 +145,19 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                 CreateDecisionScreen(
                     decisionId = decisionId,
                     onDone = { outcome ->
-                        nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}&savedMessage=${Uri.encode("决定已保存")}") { popUpTo("home") }
+                        val sourceEntry = nav.previousBackStackEntry
+                        nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}&savedMessage=${Uri.encode("决定已保存")}") {
+                            if (decisionId != null && sourceEntry != null) {
+                                // Editing: remove the previous detail and this editor, then
+                                // land on the fresh detail without stacking a duplicate.
+                                popUpTo(sourceEntry.destination.id) { inclusive = true }
+                            } else {
+                                // Creating from a tab (决定/我的) or home: drop only this
+                                // editor so Back returns to the tab the user came from
+                                // instead of resetting to home.
+                                popUpTo(entry.destination.id) { inclusive = true }
+                            }
+                        }
                     },
                     onBack = ::navigateBackOrHome,
                     onReturnHome = ::navigateHome,
