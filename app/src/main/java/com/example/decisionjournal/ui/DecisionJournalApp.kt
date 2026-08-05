@@ -72,10 +72,15 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             NavigationBarItem(route == "home", {
+                // The home tab targets the graph's start destination, so it is the one tab
+                // whose navigate target equals the popUpTo target. Combining saveState (on the
+                // pop) with restoreState (on the navigate) for the same destination round-trips
+                // the saved state and lands back on the previous tab (e.g. decisions) instead of
+                // home. No restoreState here — the other two tabs navigate to a different
+                // destination and keep it.
                 nav.navigate("home") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                     launchSingleTop = true
-                    restoreState = true
                 }
             }, { ArchiveNavigationIcon(Icons.Rounded.Home, route == "home") }, label = { Text("今天") }, colors = navColors, modifier = Modifier.semantics {
                 contentDescription = "今天"
