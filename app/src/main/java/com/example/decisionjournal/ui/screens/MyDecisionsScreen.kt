@@ -169,10 +169,15 @@ fun MyDecisionsScreen(
         modifier = Modifier
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical)
             .imePadding(),
-        verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
+        // The timeline reads as one rhythm: cards sit 16dp apart. The header block keeps an
+        // extra 8dp bottom so the section title still breathes 24dp before the first card.
+        verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing)) {
+            Column(
+                Modifier.padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
+            ) {
                 JournalTopBar(
                     title = if (showStats) "我的档案" else "全部决定",
                     subtitle = if (showStats) "从记录里，看见自己如何选择" else "按时间回看每一次判断",

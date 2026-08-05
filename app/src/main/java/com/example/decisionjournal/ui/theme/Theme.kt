@@ -41,7 +41,6 @@ private val Colors = lightColorScheme(
 object JournalDimens {
     val pageHorizontal = 20.dp
     val pageVertical = 20.dp
-    val sectionSpacing = 32.dp
     val cardSpacing = 16.dp
     val cardPadding = 20.dp
     val buttonHeight = 56.dp

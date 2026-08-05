@@ -287,10 +287,12 @@ fun ReviewScreen(
         JournalTextField(value = nextTimeNote, onValueChange = { hasUnsavedChanges = true; nextTimeNote = it }, modifier = Modifier.fillMaxWidth(), label = { Text("下次我会注意什么（可选）") })
 
         SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("还要继续回看吗？", style = MaterialTheme.typography.titleMedium)
-                Text("给这段经历留一个未来的回看日。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("还要继续回看吗？", style = MaterialTheme.typography.titleMedium)
+                        Text("给这段经历留一个未来的回看日。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     TextButton(
                         onClick = { hasUnsavedChanges = true; showDatePicker() },
                         modifier = Modifier.semantics {
@@ -300,11 +302,12 @@ fun ReviewScreen(
                     ) {
                         Text(if (nextReviewDate == null) "设置下一次复盘日期" else "修改日期")
                     }
-                    nextReviewDate?.let {
+                }
+                nextReviewDate?.let {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             (nextReviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(reviewDateFormatter),
-                            modifier = Modifier.padding(start = 12.dp),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                         TextButton(
                             onClick = { hasUnsavedChanges = true; nextReviewDate = null; nextReviewDateCalendarKey = null },

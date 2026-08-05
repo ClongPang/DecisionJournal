@@ -365,18 +365,20 @@ fun CreateDecisionScreen(
                 JournalTextField(question, { hasUnsavedChanges = true; vm.clearError(); question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
                 JournalTextField(contextText, { hasUnsavedChanges = true; contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("决定日期", style = MaterialTheme.typography.titleMedium)
-                            Text("记录这次选择发生的时间", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        TextButton(
-                            onClick = { hasUnsavedChanges = true; showDecisionDatePicker() },
-                            modifier = Modifier.align(Alignment.End).semantics {
-                                contentDescription = "修改决定日期：${Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)}"
-                            },
-                        ) {
-                            Text(Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate))
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("决定日期", style = MaterialTheme.typography.titleMedium)
+                                Text("记录这次选择发生的时间", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(
+                                onClick = { hasUnsavedChanges = true; showDecisionDatePicker() },
+                                modifier = Modifier.semantics {
+                                    contentDescription = "修改决定日期：${Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)}"
+                                },
+                            ) {
+                                Text(Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate))
+                            }
                         }
                     }
                 }
@@ -456,7 +458,7 @@ fun CreateDecisionScreen(
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text("未来回看", style = MaterialTheme.typography.titleMedium)
                                 Text("给这段经历留一个未来的回看日", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
