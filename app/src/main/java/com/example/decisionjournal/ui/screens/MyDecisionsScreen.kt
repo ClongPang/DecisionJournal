@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.DecisionsViewModel
+import com.example.decisionjournal.ui.DecisionListState
 import com.example.decisionjournal.ui.CustomDateRange
 import com.example.decisionjournal.ui.DecisionFilter
 import com.example.decisionjournal.ui.DecisionPeriod
@@ -84,6 +85,8 @@ fun MyDecisionsScreen(
     vm: DecisionsViewModel = hiltViewModel(),
 ) {
     val decisions by vm.decisions.collectAsStateWithLifecycle()
+    val searchFields by vm.searchFields.collectAsStateWithLifecycle()
+    val decisionListState by vm.listState.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val periodCounts by vm.periodCounts.collectAsStateWithLifecycle()
     val statusCounts by vm.statusCounts.collectAsStateWithLifecycle()
@@ -134,14 +137,14 @@ fun MyDecisionsScreen(
     }
 
     val timelineSource = if (showStats) decisions else filteredDecisions
-    val searchedTimelineSource = if (showStats) timelineSource else searchDecisions(timelineSource, searchQuery)
+    val searchedTimelineSource = if (showStats) timelineSource else searchDecisions(timelineSource, searchQuery, searchFields)
     var visibleDecisionCount by rememberSaveable(showStats, selectedFilter, searchQuery) { mutableIntStateOf(INITIAL_DECISION_PAGE_SIZE) }
     LaunchedEffect(searchedTimelineSource.size) {
         visibleDecisionCount = visibleDecisionCount.coerceAtMost(searchedTimelineSource.size.coerceAtLeast(INITIAL_DECISION_PAGE_SIZE))
     }
     val timelineDecisions = searchedTimelineSource.take(visibleDecisionCount)
     val insights = remember(decisions) { calculateSelfInsights(decisions) }
-    val hasDecisions = decisions.isNotEmpty()
+    val hasDecisions = decisionListState is DecisionListState.Content
     val timelineTitle = if (showStats) "决策时间线" else if (searchQuery.isNotBlank()) "搜索结果" else when (val filter = selectedFilter) {
         DecisionFilter.All -> "全部记录"
         DecisionFilter.Due -> "待回看的决定"
@@ -153,10 +156,10 @@ fun MyDecisionsScreen(
     }
     // These are two distinct tab experiences.  Keeping a list state per mode prevents
     // the archive from opening midway down the decisions timeline after tab switching.
-    val listState = remember(showStats) { LazyListState() }
+    val timelineListState = remember(showStats) { LazyListState() }
 
     LazyColumn(
-        state = listState,
+        state = timelineListState,
         modifier = Modifier.padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.sectionSpacing),
     ) {
@@ -165,6 +168,9 @@ fun MyDecisionsScreen(
                 JournalTopBar(
                     title = if (showStats) "我的档案" else "全部决定",
                     subtitle = if (showStats) "从记录里，看见自己如何选择" else "按时间回看每一次判断",
+                    trailing = {
+                        TextButton(onClick = onCreate) { Text("新建") }
+                    },
                 )
                 if (!showStats && hasDecisions) {
                     PeriodOverview(
@@ -182,18 +188,30 @@ fun MyDecisionsScreen(
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("搜索决定") },
-                        placeholder = { Text("问题、背景或在意的事") },
+                        placeholder = { Text("问题、选项、结果或在意的事") },
                         minLines = 1,
                         maxLines = 1,
                     )
                 }
                 if (showStats && hasDecisions) {
-                    Overview(stats.completedCount, stats.mostCaredAbout ?: "还在认识自己", stats.dueCount)
+                    Overview(stats.completedCount, stats.mostCaredAbout, stats.mostCaredAboutEvidenceCount, stats.dueCount)
                     Text(
                         "记录是给未来的线索，不是给现在的评分。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (insights.isEmpty()) {
+                        SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistSand) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("还在认识自己", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "再积累至少 3 条重复出现的在意或担忧，会在这里生成可追溯的观察。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                     insights.forEachIndexed { index, insight ->
                         val insightColor = listOf(MistBlue, MistSand, MistGreen)[index % 3]
                         val explore = onExploreKeyword?.let { openKeyword -> { openKeyword(insight.description) } }
@@ -214,50 +232,71 @@ fun MyDecisionsScreen(
                         }
                     }
                 }
-                SectionHeader(if (showStats && !hasDecisions) "从这里开始" else timelineTitle)
-                if (timelineDecisions.isEmpty()) {
-                    val isSearching = !showStats && searchQuery.isNotBlank()
-                    val displaySearchQuery = searchQuery.trim().let { query ->
-                        if (query.length > 20) "${query.take(20)}…" else query
+                when (val state = decisionListState) {
+                    DecisionListState.Loading -> {
+                        SectionHeader("正在读取档案")
+                        SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
+                            Text("正在读取你的本机记录…", modifier = Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    val emptyAction: () -> Unit = when {
-                        isSearching -> { { searchQuery = "" } }
-                        showStats || selectedFilter == DecisionFilter.All -> onCreate
-                        else -> vm::clearFilter
+                    is DecisionListState.Error -> {
+                        SectionHeader("暂时无法打开档案")
+                        SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistSand) {
+                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(state.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                TextButton(onClick = vm::retry) { Text("重试") }
+                            }
+                        }
                     }
-                    EmptyJournalState(
-                        when {
-                            isSearching -> "没有找到包含“$displaySearchQuery”的决定。"
-                            showStats && !hasDecisions -> "还没有属于你的档案，先留下第一个决定吧。"
-                            selectedFilter == DecisionFilter.All -> "还没有记录，先写下第一个决定吧。"
-                            else -> "这个筛选条件下还没有决定。"
-                        },
-                        when {
-                            isSearching -> "清除搜索"
-                            showStats || selectedFilter == DecisionFilter.All -> "记录一个决定"
-                            else -> "清除筛选"
-                        },
-                        emptyAction,
-                        primaryAction = !isSearching && (showStats || selectedFilter == DecisionFilter.All),
-                    )
+                    else -> {
+                        SectionHeader(if (showStats && !hasDecisions) "从这里开始" else timelineTitle)
+                        if (timelineDecisions.isEmpty()) {
+                            val isSearching = !showStats && searchQuery.isNotBlank()
+                            val displaySearchQuery = searchQuery.trim().let { query ->
+                                if (query.length > 20) "${query.take(20)}…" else query
+                            }
+                            val emptyAction: () -> Unit = when {
+                                isSearching -> { { searchQuery = "" } }
+                                showStats || selectedFilter == DecisionFilter.All -> onCreate
+                                else -> vm::clearFilter
+                            }
+                            EmptyJournalState(
+                                when {
+                                    isSearching -> "没有找到包含“$displaySearchQuery”的决定。"
+                                    showStats && !hasDecisions -> "还没有属于你的档案，先留下第一个决定吧。"
+                                    selectedFilter == DecisionFilter.All -> "还没有记录，先写下第一个决定吧。"
+                                    else -> "这个筛选条件下还没有决定。"
+                                },
+                                when {
+                                    isSearching -> "清除搜索"
+                                    showStats || selectedFilter == DecisionFilter.All -> "记录一个决定"
+                                    else -> "清除筛选"
+                                },
+                                emptyAction,
+                                primaryAction = !isSearching && (showStats || selectedFilter == DecisionFilter.All),
+                            )
+                        }
+                    }
                 }
             }
         }
-        itemsIndexed(timelineDecisions, key = { _, decision -> decision.id }) { index, decision ->
-            TimelineItem(
-                decision = decision,
-                now = now,
-                isFirst = index == 0,
-                isLast = index == timelineDecisions.lastIndex,
-                onOpen = onOpen,
-            )
-        }
-        if (timelineDecisions.size < searchedTimelineSource.size) {
-            item {
-                TextButton(
-                    onClick = { visibleDecisionCount = nextDecisionPageSize(visibleDecisionCount, searchedTimelineSource.size) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("加载更多（${timelineDecisions.size}/${searchedTimelineSource.size}）") }
+        if (decisionListState !is DecisionListState.Error) {
+            itemsIndexed(timelineDecisions, key = { _, decision -> decision.id }) { index, decision ->
+                TimelineItem(
+                    decision = decision,
+                    now = now,
+                    isFirst = index == 0,
+                    isLast = index == timelineDecisions.lastIndex,
+                    onOpen = onOpen,
+                )
+            }
+            if (timelineDecisions.size < searchedTimelineSource.size) {
+                item {
+                    TextButton(
+                        onClick = { visibleDecisionCount = nextDecisionPageSize(visibleDecisionCount, searchedTimelineSource.size) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("加载更多（${timelineDecisions.size}/${searchedTimelineSource.size}）") }
+                }
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
@@ -327,7 +366,7 @@ private fun PeriodOverview(
 @Composable
 private fun StatusFilterChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     SoftSurfaceCard(
-        modifier = modifier.height(44.dp),
+        modifier = modifier.height(48.dp),
         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         borderColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.52f) else null,
         onClick = onClick,
@@ -357,7 +396,7 @@ private fun PeriodCard(
     modifier: Modifier,
 ) {
     SoftSurfaceCard(
-        modifier = modifier.height(44.dp),
+        modifier = modifier.height(48.dp),
         containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         borderColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.52f) else null,
         onClick = onClick,
@@ -383,7 +422,7 @@ private fun DecisionPeriod.label(): String = when (this) {
 }
 
 @Composable
-private fun Overview(completed: Int, caredAbout: String, due: Int) {
+private fun Overview(completed: Int, caredAbout: String?, caredAboutEvidenceCount: Int, due: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         NarrativeCard(modifier = Modifier.fillMaxWidth(), color = MistBlue) {
             Row(
@@ -400,19 +439,34 @@ private fun Overview(completed: Int, caredAbout: String, due: Int) {
             }
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SmallInsightCard("最常在意", caredAbout, Icons.Rounded.FavoriteBorder, Modifier.weight(1f), MaterialTheme.colorScheme.surface)
-            SmallInsightCard("待复盘", "$due 个", Icons.Rounded.Schedule, Modifier.weight(1f), MistGreen)
+            SmallInsightCard(
+                "最常在意",
+                if (caredAbout != null && caredAboutEvidenceCount >= 3) caredAbout else "样本不足",
+                if (caredAbout != null && caredAboutEvidenceCount >= 3) "来自 $caredAboutEvidenceCount 条记录" else "积累 3 条后显示",
+                Icons.Rounded.FavoriteBorder,
+                Modifier.weight(1f),
+                MaterialTheme.colorScheme.surface,
+            )
+            SmallInsightCard("待复盘", "$due 个", null, Icons.Rounded.Schedule, Modifier.weight(1f), MistGreen)
         }
     }
 }
 
 @Composable
-private fun SmallInsightCard(title: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, color: Color) {
+private fun SmallInsightCard(
+    title: String,
+    value: String,
+    supporting: String?,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier,
+    color: Color,
+) {
     SoftSurfaceCard(modifier = modifier.fillMaxHeight(), containerColor = color) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(18.dp))
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            supporting?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
         }
     }
 }

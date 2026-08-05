@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +44,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -197,7 +203,8 @@ fun CreateDecisionScreen(
     fun save() {
         val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate)
         if (!vm.validateBeforePermissionRequest(input)) return
-        val needsPermission = Build.VERSION.SDK_INT >= 33 && reviewDate != null && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        val selectedReviewDate = reviewDate
+        val needsPermission = Build.VERSION.SDK_INT >= 33 && selectedReviewDate != null && selectedReviewDate > System.currentTimeMillis() && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             pendingInput = input
             showNotificationRationale = true
@@ -324,12 +331,15 @@ fun CreateDecisionScreen(
                 JournalTextField(question, { hasUnsavedChanges = true; vm.clearError(); question = it }, Modifier.fillMaxWidth(), label = { Text("我在决定什么？*") }, placeholder = { Text("例如：要不要接受那份工作？") })
                 JournalTextField(contextText, { hasUnsavedChanges = true; contextText = it }, Modifier.fillMaxWidth(), label = { Text("背景（可选）") })
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text("决定日期", style = MaterialTheme.typography.titleMedium)
                             Text("记录这次选择发生的时间", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                            TextButton(onClick = { hasUnsavedChanges = true; showDecisionDatePicker() }) {
+                        TextButton(
+                            onClick = { hasUnsavedChanges = true; showDecisionDatePicker() },
+                            modifier = Modifier.align(Alignment.End),
+                        ) {
                             Text(Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate))
                         }
                     }
@@ -419,7 +429,15 @@ fun CreateDecisionScreen(
                         }
                     }
                 }
-                Text("设置复盘日期后，系统会询问是否允许发送提醒。拒绝权限也不影响保存。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (reviewDate?.let { it <= System.currentTimeMillis() } == true) {
+                        "今天回看会在保存后立即显示为待回看，不会发送系统通知。"
+                    } else {
+                        "设置未来复盘日期后，系统会询问是否允许发送提醒。拒绝权限也不影响保存。"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.primaryContainer) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("准备封存", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -441,7 +459,7 @@ fun CreateDecisionScreen(
         vm.error?.let { JournalErrorText(it) }
         }
         Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding(),
             color = MaterialTheme.colorScheme.background,
         ) {
             Row(
@@ -499,7 +517,10 @@ private fun ConfidenceSelector(value: Int?, onSelect: (Int) -> Unit) {
                 val selected = value == score
                 Surface(
                     onClick = { onSelect(score) },
-                    modifier = Modifier.weight(1f).height(48.dp),
+                    modifier = Modifier.weight(1f).height(48.dp).semantics {
+                        role = Role.RadioButton
+                        this.selected = selected
+                    },
                     shape = MaterialTheme.shapes.small,
                     color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),

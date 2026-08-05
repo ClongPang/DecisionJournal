@@ -38,6 +38,7 @@ data class ReviewInput(
     val nextTimeNote: String? = null,
 )
 data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
+data class DecisionSearchFields(val decisionId: Long, val terms: List<String>)
 data class SaveOutcome(val id: Long, val reminderWarning: String? = null)
 
 private suspend fun <T> capture(block: suspend () -> T): Result<T> = try {
@@ -53,6 +54,25 @@ class DecisionRepository @Inject constructor(
     private val reminderScheduler: ReviewReminderScheduler,
 ) {
     val decisions = dao.observeAll()
+    val searchFields = combine(dao.observeAllChoices(), dao.observeAllReviews()) { choices, reviews ->
+        val termsByDecision = linkedMapOf<Long, MutableList<String>>()
+        choices.forEach { choice ->
+            termsByDecision.getOrPut(choice.decisionId) { mutableListOf() }.apply {
+                add(choice.text)
+                addAll(choice.benefits)
+                addAll(choice.concerns)
+            }
+        }
+        reviews.forEach { review ->
+            termsByDecision.getOrPut(review.decisionId) { mutableListOf() }.apply {
+                add(review.result)
+                review.accurateJudgment?.let(::add)
+                review.unexpectedFinding?.let(::add)
+                review.nextTimeNote?.let(::add)
+            }
+        }
+        termsByDecision.map { (decisionId, terms) -> DecisionSearchFields(decisionId, terms) }
+    }
     fun due(now: Long = System.currentTimeMillis()) = dao.observeDue(now)
     @OptIn(ExperimentalCoroutinesApi::class)
     fun due(clock: Flow<Long>): Flow<List<Decision>> = clock.flatMapLatest { dao.observeDue(it) }

@@ -10,9 +10,11 @@ import com.example.decisionjournal.data.SaveOutcome
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -56,18 +58,49 @@ sealed interface DecisionLoadState {
     data class Content(val decision: com.example.decisionjournal.data.model.Decision) : DecisionLoadState
 }
 
+sealed interface DecisionListState {
+    data object Loading : DecisionListState
+    data object Empty : DecisionListState
+    data class Content(val decisions: List<com.example.decisionjournal.data.model.Decision>) : DecisionListState
+    data class Error(val message: String) : DecisionListState
+}
+
+private fun Flow<List<com.example.decisionjournal.data.model.Decision>>.asDecisionListState(): Flow<DecisionListState> =
+    map< List<com.example.decisionjournal.data.model.Decision>, DecisionListState> { decisions ->
+        if (decisions.isEmpty()) DecisionListState.Empty else DecisionListState.Content(decisions)
+    }
+        .catch { error -> emit(DecisionListState.Error(error.message ?: "无法读取本机记录")) }
+
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel @Inject constructor(repo: DecisionRepository) : ViewModel() {
-    val all = repo.decisions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val refresh = MutableStateFlow(0)
+    // Keep exactly one Room subscription for the home archive. Previously `listState` and
+    // `all` independently collected the same cold Flow, so a page resume could show Loading
+    // while the other collector still held data. The state is now the single source of truth.
+    private val decisionStates = refresh.flatMapLatest { repo.decisions.asDecisionListState() }
+    val listState = decisionStates
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionListState.Loading)
     private val clock = minuteClock().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
-    val due = clock.flatMapLatest(repo::due)
+    val due = combine(refresh, clock) { _, now -> now }.flatMapLatest(repo::due)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun retry() { refresh.value += 1 }
 }
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class DecisionsViewModel @Inject constructor(repo: DecisionRepository) : ViewModel() {
-    val decisions = repo.decisions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val refresh = MutableStateFlow(0)
+    // Share one observed state with the archive, filters and statistics instead of opening
+    // parallel Room collectors that can briefly disagree during a resume or a write.
+    private val decisionStates = refresh.flatMapLatest { repo.decisions.asDecisionListState() }
+    val listState = decisionStates
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionListState.Loading)
+    val decisions = listState.map { state ->
+        (state as? DecisionListState.Content)?.decisions.orEmpty()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val searchFields = repo.searchFields.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val now = minuteClock().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
     val stats = combine(decisions, now) { items, currentTime -> calculateDecisionStats(items, currentTime) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionStats(0, 0, null))
@@ -94,6 +127,8 @@ class DecisionsViewModel @Inject constructor(repo: DecisionRepository) : ViewMod
     fun setFilter(value: DecisionFilter) {
         filter.value = value
     }
+
+    fun retry() { refresh.value += 1 }
 }
 
 private fun currentDate(timestamp: Long): LocalDate =

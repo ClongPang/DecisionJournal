@@ -2,6 +2,7 @@ package com.example.decisionjournal.ui
 
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.DecisionSearchFields
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -9,6 +10,7 @@ data class DecisionStats(
     val completedCount: Int,
     val dueCount: Int,
     val mostCaredAbout: String?,
+    val mostCaredAboutEvidenceCount: Int = 0,
 )
 
 data class SelfInsight(
@@ -121,9 +123,14 @@ fun filterDecisions(
 }
 
 /** Filters the already-selected archive scope without changing its sort order. */
-fun searchDecisions(decisions: List<Decision>, query: String): List<Decision> {
+fun searchDecisions(
+    decisions: List<Decision>,
+    query: String,
+    searchFields: List<DecisionSearchFields> = emptyList(),
+): List<Decision> {
     val keyword = query.trim()
     if (keyword.isEmpty()) return decisions
+    val fieldsByDecision = searchFields.associateBy { it.decisionId }
     return decisions.filter { decision ->
         buildList {
             add(decision.question)
@@ -132,6 +139,7 @@ fun searchDecisions(decisions: List<Decision>, query: String): List<Decision> {
             decision.expectedOutcome?.let(::add)
             addAll(decision.benefits)
             addAll(decision.concerns)
+            addAll(fieldsByDecision[decision.id]?.terms.orEmpty())
         }.any { it.contains(keyword, ignoreCase = true) }
     }
 }
@@ -147,18 +155,16 @@ private fun rangeBetween(start: LocalDate, endExclusive: LocalDate, zone: ZoneId
 
 fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats {
     val caredAbout = decisions
-        .flatMap { it.benefits }
-        .map(String::trim)
-        .filter(String::isNotEmpty)
+        .flatMap { decision -> decision.benefits.map(String::trim).filter(String::isNotEmpty).distinct() }
         .groupingBy { it }
         .eachCount()
         .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-        ?.key
 
     return DecisionStats(
         completedCount = decisions.count { it.status == DecisionStatus.REVIEWED },
         dueCount = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED },
-        mostCaredAbout = caredAbout,
+        mostCaredAbout = caredAbout?.key,
+        mostCaredAboutEvidenceCount = caredAbout?.value ?: 0,
     )
 }
 

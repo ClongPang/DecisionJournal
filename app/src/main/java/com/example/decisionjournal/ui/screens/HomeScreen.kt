@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.HomeViewModel
+import com.example.decisionjournal.ui.DecisionListState
 import com.example.decisionjournal.ui.components.NarrativeCard
 import com.example.decisionjournal.ui.components.PrimaryActionButton
 import com.example.decisionjournal.ui.components.StatusPill
@@ -51,15 +52,8 @@ fun HomeScreen(
     onViewDue: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
+    val listState by vm.listState.collectAsStateWithLifecycle()
     val due by vm.due.collectAsStateWithLifecycle()
-    val all by vm.all.collectAsStateWithLifecycle()
-    val featured = due.firstOrNull() ?: all.firstOrNull()
-    val featuredStatus = when {
-        due.isNotEmpty() -> "待回看"
-        featured?.status == DecisionStatus.REVIEWED -> "已回看"
-        featured?.reviewDate != null -> "等待回看"
-        else -> "此刻的判断"
-    }
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
@@ -72,17 +66,48 @@ fun HomeScreen(
         Text("给自己一点时间", style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(top = 12.dp))
         Text("把当时的判断留住，等生活给出答案。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        featured?.let { decision ->
-            ArchiveCoverCard(decision, featuredStatus, onOpen)
-            if (due.size > 1) {
-                TextButton(onClick = onViewDue, modifier = Modifier.align(Alignment.End)) {
-                    Text("查看全部 ${due.size} 条待回看")
+        when (listState) {
+            DecisionListState.Loading -> HomeStatusCard("正在读取你的本机记录…")
+            is DecisionListState.Error -> HomeStatusCard(
+                "暂时无法读取本机记录。",
+                actionText = "重试",
+                onAction = vm::retry,
+            )
+            DecisionListState.Empty -> EmptyArchiveState()
+            is DecisionListState.Content -> {
+                val decisions = (listState as DecisionListState.Content).decisions
+                val featured = due.firstOrNull() ?: decisions.firstOrNull()
+                val featuredStatus = when {
+                    due.isNotEmpty() -> "待回看"
+                    featured?.status == DecisionStatus.REVIEWED -> "已回看"
+                    featured?.reviewDate != null -> "等待回看"
+                    else -> "此刻的判断"
+                }
+                featured?.let { decision ->
+                    ArchiveCoverCard(decision, featuredStatus, onOpen)
+                    if (due.size > 1) {
+                        TextButton(onClick = onViewDue, modifier = Modifier.align(Alignment.End)) {
+                            Text("查看全部 ${due.size} 条待回看")
+                        }
+                    }
                 }
             }
-        } ?: EmptyArchiveState()
+        }
 
         Spacer(Modifier.weight(1f))
         PrimaryActionButton("记录一个决定", onCreate)
+    }
+}
+
+@Composable
+private fun HomeStatusCard(message: String, actionText: String? = null, onAction: (() -> Unit)? = null) {
+    NarrativeCard(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (actionText != null && onAction != null) {
+                TextButton(onClick = onAction) { Text(actionText) }
+            }
+        }
     }
 }
 

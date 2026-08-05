@@ -131,26 +131,32 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                 CreateDecisionScreen(
                     decisionId = decisionId,
                     onDone = { outcome ->
-                        nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}") { popUpTo("home") }
+                        nav.navigate("detail/${outcome.id}?reminderWarning=${outcome.reminderWarning != null}&savedMessage=${Uri.encode("决定已保存")}") { popUpTo("home") }
                     },
                     onBack = ::navigateBackOrHome,
                     onReturnHome = ::navigateHome,
                 )
             }
             composable(
-                "detail/{id}?reminderWarning={reminderWarning}",
+                "detail/{id}?reminderWarning={reminderWarning}&savedMessage={savedMessage}",
                 arguments = listOf(
                     navArgument("id") { type = NavType.LongType },
                     navArgument("reminderWarning") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("savedMessage") { type = NavType.StringType; defaultValue = "" },
                 ),
             ) { entry ->
                 val id = entry.arguments?.getLong("id") ?: return@composable
                 val reminderWarning by entry.savedStateHandle
                     .getStateFlow("reminderWarning", entry.arguments?.getBoolean("reminderWarning") ?: false)
                     .collectAsStateWithLifecycle()
+                val savedMessage by entry.savedStateHandle
+                    .getStateFlow("savedMessage", entry.arguments?.getString("savedMessage").orEmpty())
+                    .collectAsStateWithLifecycle()
                 DecisionDetailScreen(
                     id = id,
                     reminderWarning = reminderWarning,
+                    savedMessage = savedMessage,
+                    onSavedMessageConsumed = { entry.savedStateHandle["savedMessage"] = "" },
                     onReview = { nav.navigate("review/$id") },
                     onEdit = { nav.navigate("create?decisionId=$id") },
                     onBack = ::navigateBackOrHome,
@@ -163,6 +169,7 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     id,
                     onDone = { outcome ->
                         nav.previousBackStackEntry?.savedStateHandle?.set("reminderWarning", outcome.reminderWarning != null)
+                        nav.previousBackStackEntry?.savedStateHandle?.set("savedMessage", "复盘已保存")
                         nav.popBackStack()
                     },
                     onBack = ::navigateBackOrHome,

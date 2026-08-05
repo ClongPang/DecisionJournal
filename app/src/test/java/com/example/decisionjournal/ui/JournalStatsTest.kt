@@ -2,9 +2,11 @@ package com.example.decisionjournal.ui
 
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.DecisionSearchFields
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import com.example.decisionjournal.ui.screens.reviewIntervalLabel
 import org.junit.Test
 
 class JournalStatsTest {
@@ -118,6 +120,21 @@ class JournalStatsTest {
         assertEquals(listOf("工作选择"), searchDecisions(decisions, "成长").map { it.question })
         assertEquals(decisions, searchDecisions(decisions, "   "))
     }
+
+    @Test
+    fun searchAlsoMatchesOptionsAndReviewObservations() {
+        val decisions = listOf(
+            Decision(id = 1, question = "是否搬家"),
+            Decision(id = 2, question = "学习计划"),
+        )
+        val fields = listOf(
+            DecisionSearchFields(1, listOf("住到公司附近", "减少通勤")),
+            DecisionSearchFields(2, listOf("复盘后发现难以坚持", "下次缩小目标")),
+        )
+
+        assertEquals(listOf("是否搬家"), searchDecisions(decisions, "通勤", fields).map { it.question })
+        assertEquals(listOf("学习计划"), searchDecisions(decisions, "缩小目标", fields).map { it.question })
+    }
     @Test
     fun calculatesCompletedDueAndMostCaredAbout() {
         val decisions = listOf(
@@ -131,6 +148,7 @@ class JournalStatsTest {
         assertEquals(1, stats.completedCount)
         assertEquals(1, stats.dueCount)
         assertEquals("生活平衡", stats.mostCaredAbout)
+        assertEquals(3, stats.mostCaredAboutEvidenceCount)
     }
 
     @Test
@@ -138,6 +156,7 @@ class JournalStatsTest {
         val stats = calculateDecisionStats(listOf(Decision(question = "问题")), now = 1_000L)
 
         assertEquals(null, stats.mostCaredAbout)
+        assertEquals(0, stats.mostCaredAboutEvidenceCount)
     }
 
     @Test
@@ -172,5 +191,11 @@ class JournalStatsTest {
         val decisions = listOf(Decision(question = "一", benefits = listOf("成长")))
 
         assertEquals(emptyList<SelfInsight>(), calculateSelfInsights(decisions))
+    }
+
+    @Test
+    fun reviewIntervalsDescribeTheDecisionAndPreviousReviewSeparately() {
+        assertEquals("距决定 3 天", reviewIntervalLabel(3 * 86_400_000L, 0L, true))
+        assertEquals("距上次回看 1 天", reviewIntervalLabel(4 * 86_400_000L, 3 * 86_400_000L, false))
     }
 }

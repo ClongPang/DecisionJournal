@@ -28,8 +28,14 @@ abstract class DecisionDao {
     @Query("SELECT * FROM choices WHERE decisionId = :decisionId ORDER BY position ASC")
     abstract fun observeChoices(decisionId: Long): Flow<List<Choice>>
 
+    @Query("SELECT * FROM choices ORDER BY decisionId ASC, position ASC")
+    abstract fun observeAllChoices(): Flow<List<Choice>>
+
     @Query("SELECT * FROM reviews WHERE decisionId = :decisionId ORDER BY createdAt DESC")
     abstract fun observeReviews(decisionId: Long): Flow<List<Review>>
+
+    @Query("SELECT * FROM reviews ORDER BY decisionId ASC, createdAt DESC")
+    abstract fun observeAllReviews(): Flow<List<Review>>
 
     @Insert abstract suspend fun insertDecision(decision: Decision): Long
     @Update abstract suspend fun updateDecision(decision: Decision): Int

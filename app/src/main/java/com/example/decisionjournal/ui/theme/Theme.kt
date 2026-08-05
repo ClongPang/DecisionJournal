@@ -19,13 +19,23 @@ private val Colors = lightColorScheme(
     onBackground = Ink,
     surface = CardWhite,
     onSurface = Ink,
+    surfaceVariant = PaperMuted,
+    onSurfaceVariant = SecondaryInk,
+    surfaceTint = BlueAccent,
+    outline = Hairline,
+    outlineVariant = Hairline,
     secondary = SoftSage,
+    onSecondary = CardWhite,
     primaryContainer = MistBlue,
     onPrimaryContainer = Ink,
     secondaryContainer = MistGreen,
     onSecondaryContainer = Ink,
     tertiaryContainer = MistSand,
     onTertiaryContainer = Ink,
+    error = MutedTerracotta,
+    onError = CardWhite,
+    errorContainer = MistSand,
+    onErrorContainer = Ink,
 )
 
 object JournalDimens {

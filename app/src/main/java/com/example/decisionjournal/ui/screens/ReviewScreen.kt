@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,9 +84,14 @@ fun ReviewScreen(
     var hasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
     var confirmExit by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
-    val decisionState by vm.decisionState(decisionId).collectAsStateWithLifecycle(DecisionLoadState.Loading)
-    val choices by vm.choices(decisionId).collectAsStateWithLifecycle(emptyList())
-    val reviews by vm.reviews(decisionId).collectAsStateWithLifecycle(emptyList())
+    // Do not recreate cold flows on every field edit: doing so restarts their Loading emission
+    // and makes the review form visibly flash.
+    val decisionStateFlow = remember(vm, decisionId) { vm.decisionState(decisionId) }
+    val choicesFlow = remember(vm, decisionId) { vm.choices(decisionId) }
+    val reviewsFlow = remember(vm, decisionId) { vm.reviews(decisionId) }
+    val decisionState by decisionStateFlow.collectAsStateWithLifecycle(DecisionLoadState.Loading)
+    val choices by choicesFlow.collectAsStateWithLifecycle(emptyList())
+    val reviews by reviewsFlow.collectAsStateWithLifecycle(emptyList())
 
     fun showDatePicker() {
         val date = nextReviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
@@ -118,6 +128,7 @@ fun ReviewScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
@@ -220,16 +231,30 @@ fun ReviewScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("还要继续回看吗？", style = MaterialTheme.typography.titleMedium)
                 Text("给这段经历留一个未来的时间点。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { hasUnsavedChanges = true; showDatePicker() }) { Text(if (nextReviewDate == null) "设置下一次复盘日期" else "修改日期") }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(onClick = { hasUnsavedChanges = true; showDatePicker() }) {
+                        Text(if (nextReviewDate == null) "设置下一次复盘日期" else "修改日期")
+                    }
                     nextReviewDate?.let {
-                        Text(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(reviewDateFormatter), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(reviewDateFormatter),
+                            modifier = Modifier.padding(start = 12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                         TextButton(onClick = { hasUnsavedChanges = true; nextReviewDate = null }) { Text("不再提醒") }
                     }
                 }
             }
         }
-        Text("不设置日期也可以保存，之后可在详情页再次发起复盘。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (nextReviewDate?.let { it <= System.currentTimeMillis() } == true) {
+                "今天继续回看会在保存后立即显示为待回看，不会发送系统通知。"
+            } else {
+                "不设置日期也可以保存，之后可在详情页再次发起复盘。"
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
         vm.error?.let { JournalErrorText(it) }
         Spacer(Modifier.height(4.dp))
         PrimaryActionButton(
@@ -282,7 +307,10 @@ private fun ReviewChoiceChip(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(52.dp),
+        modifier = modifier.height(52.dp).semantics {
+            role = Role.RadioButton
+            this.selected = selected
+        },
         shape = MaterialTheme.shapes.small,
         color = if (selected) color else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
