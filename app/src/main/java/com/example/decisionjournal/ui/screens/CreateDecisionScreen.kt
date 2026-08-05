@@ -115,7 +115,12 @@ fun CreateDecisionScreen(
     onReturnHome: () -> Unit = onBack,
     vm: CreateDecisionViewModel = hiltViewModel(),
 ) {
-    val editorState by (decisionId?.let { vm.editor(it) } ?: flowOf<DecisionEditorState>(DecisionEditorState.Loading)).collectAsStateWithLifecycle(DecisionEditorState.Loading)
+    // Keep the editor flow stable while a field change recomposes this screen. Recreating this
+    // cold flow would emit Loading again and visibly interrupt an edit.
+    val editorStateFlow = remember(vm, decisionId) {
+        decisionId?.let(vm::editor) ?: flowOf(DecisionEditorState.Loading)
+    }
+    val editorState by editorStateFlow.collectAsStateWithLifecycle(DecisionEditorState.Loading)
     val editor = (editorState as? DecisionEditorState.Content)?.data
     var step by rememberSaveable { mutableStateOf(0) }
     var question by rememberSaveable { mutableStateOf("") }
@@ -503,7 +508,11 @@ fun CreateDecisionScreen(
     if (showNotificationRationale) AlertDialog(
         onDismissRequest = { showNotificationRationale = false },
         title = { Text("要在回看日提醒你吗？") },
-        text = { Text("提醒仅用于你设置的回看日期。即使不开启通知，这条决定也会照常保存。") },
+        text = {
+            Text(
+                "提醒仅用于你设置的回看日期，会在当天${reminderTimeLabel()}发送，实际到达可能略有延迟。即使不开启通知，这条决定也会照常保存。",
+            )
+        },
         confirmButton = {
             androidx.compose.material3.TextButton(onClick = {
                 showNotificationRationale = false

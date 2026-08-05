@@ -249,7 +249,16 @@ fun DecisionDetailScreen(
                     }
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("决定于 ${formatDate(d.decisionDate)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        d.reviewDate?.let { Text("回看于 ${formatDate(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        d.reviewDate?.let { reviewDate ->
+                            Text("回看日：${formatDate(reviewDate)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (!reviewed && reviewDate > now) {
+                                Text(
+                                    "预设提醒：回看日${reminderTimeLabel()}；系统可能略有延迟",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                 }
             }

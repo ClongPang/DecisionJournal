@@ -228,7 +228,10 @@ fun ReviewScreen(
                         ReviewChoiceChip(
                             label = match.label(),
                             selected = expectationMatch == match,
-                            onClick = { hasUnsavedChanges = true; expectationMatch = match },
+                            onClick = {
+                                hasUnsavedChanges = true
+                                expectationMatch = if (expectationMatch == match) null else match
+                            },
                             modifier = Modifier.weight(1f),
                             color = MistBlue,
                         )
@@ -243,7 +246,10 @@ fun ReviewScreen(
                 ReviewChoiceChip(
                     label = "$score",
                     selected = satisfaction == score.toString(),
-                    onClick = { hasUnsavedChanges = true; satisfaction = score.toString() },
+                    onClick = {
+                        hasUnsavedChanges = true
+                        satisfaction = if (satisfaction == score.toString()) "" else score.toString()
+                    },
                     modifier = Modifier.weight(1f),
                     color = MistGreen,
                 )
@@ -311,7 +317,11 @@ fun ReviewScreen(
     if (showNotificationRationale) AlertDialog(
         onDismissRequest = { showNotificationRationale = false },
         title = { Text("要在下一次回看日提醒你吗？") },
-        text = { Text("提醒仅用于你设置的下一次回看日期。即使不开启通知，这次复盘也会照常保存。") },
+        text = {
+            Text(
+                "提醒仅用于你设置的下一次回看日期，会在当天${reminderTimeLabel()}发送，实际到达可能略有延迟。即使不开启通知，这次复盘也会照常保存。",
+            )
+        },
         confirmButton = {
             TextButton(onClick = {
                 showNotificationRationale = false
