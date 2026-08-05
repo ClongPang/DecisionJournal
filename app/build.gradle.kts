@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -27,6 +28,29 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // Signing secrets live in root keystore.properties (gitignored) so they never reach VCS.
+    // Without that file the release build stays unsigned; create one before publishing.
+    val releaseSigning = Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.exists()) load(file.inputStream())
+    }
+    signingConfigs {
+        create("release") {
+            if (releaseSigning.isNotEmpty()) {
+                storeFile = rootProject.file(releaseSigning.getProperty("storeFile"))
+                storePassword = releaseSigning.getProperty("storePassword")
+                keyAlias = releaseSigning.getProperty("keyAlias")
+                keyPassword = releaseSigning.getProperty("keyPassword")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = if (releaseSigning.isNotEmpty()) signingConfigs.getByName("release") else null
+        }
     }
 
 }
