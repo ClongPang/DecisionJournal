@@ -228,9 +228,9 @@ fun ReviewScreen(
             }
         }
         SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistSand, hero = true) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("回到当时", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("当时的决定，现在感觉如何？", style = MaterialTheme.typography.headlineSmall)
+                Text("当时的决定，现在感觉如何？", style = MaterialTheme.typography.titleMedium)
                 Text("不用给过去打分，只记录事情后来走到了哪里。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -239,9 +239,10 @@ fun ReviewScreen(
         JournalTextField(
             value = result,
             onValueChange = { hasUnsavedChanges = true; vm.clearError(); result = it },
-            modifier = Modifier.fillMaxWidth().height(180.dp),
+            modifier = Modifier.fillMaxWidth(),
             label = { Text("记录结果*") },
             placeholder = { Text("事情后来怎么样了？") },
+            minLines = 4,
         )
 
         Text("结果和预期相比如何？", style = MaterialTheme.typography.titleMedium)
