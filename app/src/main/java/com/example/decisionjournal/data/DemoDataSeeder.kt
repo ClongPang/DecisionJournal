@@ -257,10 +257,15 @@ class DemoDataSeeder @Inject constructor(
     }
 
     private suspend fun seedActive(decision: Decision, choices: List<Choice>, selectedIndex: Int? = null) {
-        val id = dao.save(decision.copy(status = DecisionStatus.ACTIVE, selectedChoiceId = selectedIndex?.toLong()), choices)
+        val seededDecision = decision.copy(
+            status = DecisionStatus.ACTIVE,
+            selectedChoiceId = selectedIndex?.toLong(),
+            reminderAt = reviewReminderAt(decision.reviewDate),
+        )
+        val id = dao.save(seededDecision, choices)
         // Demo data must remain usable when notification permission is denied or blocked.
         try {
-            reminderScheduler.scheduleOrCancel(id, decision.reviewDate)
+            reminderScheduler.scheduleOrCancel(id, seededDecision.reviewDate, seededDecision.reminderAt)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -279,7 +284,7 @@ class DemoDataSeeder @Inject constructor(
             choices,
         )
         reviews.sortedBy { it.createdAt }.forEach { review ->
-            dao.saveReview(review.copy(decisionId = id), null, review.createdAt)
+            dao.saveReview(review.copy(decisionId = id), null, null, review.createdAt)
         }
     }
 

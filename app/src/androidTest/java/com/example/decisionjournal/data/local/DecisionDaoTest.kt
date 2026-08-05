@@ -72,10 +72,11 @@ class DecisionDaoTest {
     @Test
     fun reviewWithNextDateKeepsDecisionActiveAndReschedulesDate() = runBlocking {
         val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
-        dao.saveReview(Review(decisionId = id, result = "第一次结果"), 2_000L, 1_000L)
+        dao.saveReview(Review(decisionId = id, result = "第一次结果"), 2_000L, 2_100L, 1_000L)
 
         val saved = dao.getById(id)
         assertEquals(2_000L, saved?.reviewDate)
+        assertEquals(2_100L, saved?.reminderAt)
         assertEquals(DecisionStatus.ACTIVE, saved?.status)
         assertEquals(1, dao.observeReviews(id).first().size)
     }
@@ -83,7 +84,7 @@ class DecisionDaoTest {
     @Test
     fun reviewWithoutNextDateEndsReminderButKeepsHistory() = runBlocking {
         val id = dao.save(Decision(question = "问题"), listOf(Choice(0, 0, "方案")))
-        dao.saveReview(Review(decisionId = id, result = "最终结果"), null, 1_000L)
+        dao.saveReview(Review(decisionId = id, result = "最终结果"), null, null, 1_000L)
 
         val saved = dao.getById(id)
         assertEquals(null, saved?.reviewDate)
@@ -104,7 +105,7 @@ class DecisionDaoTest {
     @Test
     fun reviewForMissingDecisionDoesNotInsertReview() = runBlocking {
         try {
-            dao.saveReview(Review(decisionId = 999L, result = "孤儿复盘"), null, 1_000L)
+            dao.saveReview(Review(decisionId = 999L, result = "孤儿复盘"), null, null, 1_000L)
             fail("缺失的决定 ID 应拒绝复盘")
         } catch (_: IllegalStateException) {
             assertEquals(emptyList<Review>(), dao.observeReviews(999L).first())
@@ -165,13 +166,14 @@ class DecisionDaoTest {
         version7.close()
 
         val migrated = Room.databaseBuilder(context, DecisionDatabase::class.java, databaseName)
-            .addMigrations(DecisionDatabase.MIGRATION_7_8)
+            .addMigrations(DecisionDatabase.MIGRATION_7_8, DecisionDatabase.MIGRATION_8_9)
             .allowMainThreadQueries()
             .build()
         try {
             val saved = migrated.decisionDao().getById(1)
             assertEquals("旧决定", saved?.question)
             assertEquals("NOT_APPLICABLE", saved?.reminderState?.name)
+            assertNull(saved?.reminderAt)
         } finally {
             migrated.close()
             context.deleteDatabase(databaseName)

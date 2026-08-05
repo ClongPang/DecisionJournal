@@ -94,6 +94,7 @@ class DecisionRepository @Inject constructor(
             "复盘日期不能早于今天"
         }
         val now = System.currentTimeMillis()
+        val reminderAt = reviewReminderAt(input.reviewDate, now)
         val decision = Decision(
             id = input.id,
             question = input.question.trim(),
@@ -107,11 +108,12 @@ class DecisionRepository @Inject constructor(
             updatedAt = now,
             decisionDate = input.decisionDate,
             reviewDate = input.reviewDate,
+            reminderAt = reminderAt,
             status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
             selectedChoiceId = selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
-        val reminderState = updateReminderState(id, input.reviewDate)
+        val reminderState = updateReminderState(id, input.reviewDate, reminderAt)
         val warning = reminderWarning("内容已保存", reminderState)
         SaveOutcome(id, warning)
     }
@@ -119,6 +121,7 @@ class DecisionRepository @Inject constructor(
         val validationError = ReviewValidation.validate(input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
         require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
+        val reminderAt = reviewReminderAt(input.nextReviewDate)
         val id = dao.saveReview(
             Review(
                 decisionId = input.decisionId,
@@ -130,9 +133,10 @@ class DecisionRepository @Inject constructor(
                 nextTimeNote = input.nextTimeNote?.trim()?.takeIf { it.isNotEmpty() },
             ),
             input.nextReviewDate,
+            reminderAt,
             System.currentTimeMillis(),
         )
-        val reminderState = updateReminderState(input.decisionId, input.nextReviewDate)
+        val reminderState = updateReminderState(input.decisionId, input.nextReviewDate, reminderAt)
         val warning = reminderWarning("复盘已保存", reminderState)
         SaveOutcome(id, warning)
     }
@@ -142,7 +146,7 @@ class DecisionRepository @Inject constructor(
         require(decision.reviewDate != null && decision.reviewDate > System.currentTimeMillis()) {
             "回看日期已过，无法再安排提醒"
         }
-        val state = updateReminderState(decisionId, decision.reviewDate)
+        val state = updateReminderState(decisionId, decision.reviewDate, decision.reminderAt)
         require(state == ReminderState.SCHEDULED) { state.userMessage ?: "暂时无法安排提醒，请稍后重试。" }
     }
 
@@ -150,13 +154,29 @@ class DecisionRepository @Inject constructor(
         capture {
             val decision = dao.getById(decisionId) ?: return@capture false
             val reviewDate = decision.reviewDate ?: return@capture false
-            if (reviewDate <= System.currentTimeMillis()) return@capture false
+            val expectedReminderAt = reviewReminderAt(reviewDate) ?: return@capture false
+            if (decision.reminderAt != expectedReminderAt) {
+                check(dao.updateReminderAt(decisionId, expectedReminderAt) == 1) { "更新提醒时间失败" }
+                val state = updateReminderState(decisionId, reviewDate, expectedReminderAt)
+                return@capture state == ReminderState.SCHEDULED
+            }
             val state = reminderScheduler.notificationAvailability() ?: ReminderState.SCHEDULED
             if (state != decision.reminderState) {
                 check(dao.updateReminderState(decisionId, state) == 1) { "更新提醒状态失败" }
             }
             decision.reminderState.needsAttention && state == ReminderState.SCHEDULED
         }.getOrDefault(false)
+
+    /** Rebuilds pre-v9 midnight work using the current evening reminder policy after upgrade. */
+    suspend fun reconcileReminders() {
+        dao.getAll().forEach { decision ->
+            val expectedReminderAt = reviewReminderAt(decision.reviewDate) ?: return@forEach
+            if (decision.reminderAt != expectedReminderAt) {
+                check(dao.updateReminderAt(decision.id, expectedReminderAt) == 1) { "更新提醒时间失败" }
+                updateReminderState(decision.id, decision.reviewDate, expectedReminderAt)
+            }
+        }
+    }
 
     suspend fun delete(id: Long) {
         // A scheduler failure must not leave the user's local record undeletable.
@@ -170,8 +190,8 @@ class DecisionRepository @Inject constructor(
         dao.deleteCascade(id)
     }
 
-    private suspend fun updateReminderState(decisionId: Long, reviewDate: Long?): ReminderState {
-        val state = capture { reminderScheduler.scheduleOrCancel(decisionId, reviewDate) }
+    private suspend fun updateReminderState(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState {
+        val state = capture { reminderScheduler.scheduleOrCancel(decisionId, reviewDate, reminderAt) }
             .getOrDefault(ReminderState.SCHEDULING_FAILED)
         check(dao.updateReminderState(decisionId, state) == 1) { "更新提醒状态失败" }
         return state

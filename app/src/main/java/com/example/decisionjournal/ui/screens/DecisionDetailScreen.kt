@@ -48,6 +48,8 @@ import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.data.REVIEW_REMINDER_CHANNEL_ID
+import com.example.decisionjournal.data.reminderTimeLabel
+import com.example.decisionjournal.data.model.ReminderState
 import com.example.decisionjournal.ui.DetailViewModel
 import com.example.decisionjournal.ui.DecisionLoadState
 import com.example.decisionjournal.ui.components.JournalTopBar
@@ -122,8 +124,8 @@ fun DecisionDetailScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    fun openNotificationSettings() {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    fun openNotificationSettings(state: ReminderState) {
+        val intent = if (state == ReminderState.CHANNEL_DISABLED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                 .putExtra(Settings.EXTRA_CHANNEL_ID, REVIEW_REMINDER_CHANNEL_ID)
@@ -175,7 +177,7 @@ fun DecisionDetailScreen(
                 containerColor = MistGreen,
             ) {
                 Text(
-                    "复盘提醒已恢复，将在 ${formatDate(decision.reviewDate ?: System.currentTimeMillis())} 提醒你。",
+                    "复盘提醒已恢复，将在 ${formatDate(decision.reviewDate ?: System.currentTimeMillis())}${reminderTimeLabel()}提醒你。",
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -203,7 +205,7 @@ fun DecisionDetailScreen(
                         onClick = {
                             vm.retryReminder(id) {
                                 showReminderWarning = false
-                                val whenText = decision.reviewDate?.let { "，将在 ${formatDate(it)} 提醒你" }.orEmpty()
+                                val whenText = decision.reviewDate?.let { "，将在 ${formatDate(it)}${reminderTimeLabel()}提醒你" }.orEmpty()
                                 onReminderRestored("复盘提醒已恢复$whenText")
                             }
                         },
@@ -211,7 +213,12 @@ fun DecisionDetailScreen(
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         border = BorderStroke(1.dp, MutedTerracotta.copy(alpha = 0.68f)),
                     ) { Text(if (vm.reminderRetrying) "正在安排…" else "重新安排提醒") }
-                    TextButton(onClick = ::openNotificationSettings) { Text("打开通知设置") }
+                    val settingsLabel = when (decision.reminderState) {
+                        ReminderState.PERMISSION_REQUIRED -> "打开通知权限设置"
+                        ReminderState.CHANNEL_DISABLED -> "打开复盘提醒频道"
+                        else -> "打开通知设置"
+                    }
+                    TextButton(onClick = { openNotificationSettings(decision.reminderState) }) { Text(settingsLabel) }
                 }
             }
         }

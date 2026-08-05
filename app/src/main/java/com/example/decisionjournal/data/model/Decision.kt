@@ -24,6 +24,7 @@ data class Decision(
     val updatedAt: Long = createdAt,
     val decisionDate: Long = createdAt,
     val reviewDate: Long? = null,
+    val reminderAt: Long? = null,
     val reminderState: ReminderState = ReminderState.NOT_APPLICABLE,
     val status: DecisionStatus = DecisionStatus.ACTIVE,
     val selectedChoiceId: Long? = null,

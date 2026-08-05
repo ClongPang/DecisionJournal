@@ -9,7 +9,7 @@ import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
 
-@Database(entities = [Decision::class, Choice::class, Review::class], version = 8, exportSchema = true)
+@Database(entities = [Decision::class, Choice::class, Review::class], version = 9, exportSchema = true)
 @TypeConverters(DecisionConverters::class)
 abstract class DecisionDatabase : RoomDatabase() {
     abstract fun decisionDao(): DecisionDao
@@ -58,6 +58,14 @@ abstract class DecisionDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE decisions ADD COLUMN reminderState TEXT NOT NULL DEFAULT 'NOT_APPLICABLE'")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Existing reviewDate values are calendar days. The repository rebuilds their
+                // notification work at the evening reminder time on the next app start.
+                db.execSQL("ALTER TABLE decisions ADD COLUMN reminderAt INTEGER")
             }
         }
     }

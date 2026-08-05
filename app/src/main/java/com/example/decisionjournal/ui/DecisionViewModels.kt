@@ -87,6 +87,10 @@ class HomeViewModel @Inject constructor(repo: DecisionRepository) : ViewModel() 
     val due = combine(refresh, clock) { _, now -> now }.flatMapLatest(repo::due)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    init {
+        viewModelScope.launch { repo.reconcileReminders() }
+    }
+
     fun retry() { refresh.value += 1 }
 }
 

@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +56,7 @@ import androidx.core.content.ContextCompat
 import com.example.decisionjournal.data.ChoiceInput
 import com.example.decisionjournal.data.DecisionInput
 import com.example.decisionjournal.data.SaveOutcome
+import com.example.decisionjournal.data.reminderTimeLabel
 import com.example.decisionjournal.ui.CreateDecisionViewModel
 import com.example.decisionjournal.ui.DecisionEditorState
 import com.example.decisionjournal.ui.SaveState
@@ -338,7 +340,9 @@ fun CreateDecisionScreen(
                         }
                         TextButton(
                             onClick = { hasUnsavedChanges = true; showDecisionDatePicker() },
-                            modifier = Modifier.align(Alignment.End),
+                            modifier = Modifier.align(Alignment.End).semantics {
+                                contentDescription = "修改决定日期：${Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)}"
+                            },
                         ) {
                             Text(Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate))
                         }
@@ -417,14 +421,23 @@ fun CreateDecisionScreen(
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text("未来回看", style = MaterialTheme.typography.titleMedium)
-                                Text("给这段经历留一个时间点", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("给这段经历留一个未来的回看日", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            TextButton(onClick = { hasUnsavedChanges = true; showDatePicker() }) { Text(if (reviewDate == null) "设置日期" else "修改日期") }
+                            TextButton(
+                                onClick = { hasUnsavedChanges = true; showDatePicker() },
+                                modifier = Modifier.semantics {
+                                    contentDescription = reviewDate?.let { "修改未来回看日期：${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)}" }
+                                        ?: "设置未来回看日期"
+                                },
+                            ) { Text(if (reviewDate == null) "设置日期" else "修改日期") }
                         }
                         reviewDate?.let {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate), style = MaterialTheme.typography.bodyMedium)
-                                TextButton({ hasUnsavedChanges = true; reviewDate = null }) { Text("清除") }
+                                TextButton(
+                                    { hasUnsavedChanges = true; reviewDate = null },
+                                    modifier = Modifier.semantics { contentDescription = "清除未来回看日期" },
+                                ) { Text("清除") }
                             }
                         }
                     }
@@ -433,7 +446,7 @@ fun CreateDecisionScreen(
                     if (reviewDate?.let { it <= System.currentTimeMillis() } == true) {
                         "今天回看会在保存后立即显示为待回看，不会发送系统通知。"
                     } else {
-                        "设置未来复盘日期后，系统会询问是否允许发送提醒。拒绝权限也不影响保存。"
+                        "系统会在所选日期${reminderTimeLabel()}提醒你，实际到达可能略有延迟。拒绝权限也不影响保存。"
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
@@ -448,7 +461,7 @@ fun CreateDecisionScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            reviewDate?.let { "计划于 ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)} 回看" } ?: "尚未设置回看日期",
+                            reviewDate?.let { "计划于 ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)} 回看 · ${reminderTimeLabel()}提醒" } ?: "尚未设置回看日期",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

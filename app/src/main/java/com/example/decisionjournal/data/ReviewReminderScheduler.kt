@@ -33,6 +33,7 @@ internal const val REVIEW_REMINDER_CHANNEL_ID = "review-reminders"
 private const val WORK_PREFIX = "decision-review-"
 private const val DECISION_ID = "decisionId"
 private const val SCHEDULED_REVIEW_DATE = "scheduledReviewDate"
+private const val SCHEDULED_REMINDER_AT = "scheduledReminderAt"
 private const val NOTIFICATION_TAG_PREFIX = "decision-review-"
 private const val NOTIFICATION_ID = 0
 
@@ -43,8 +44,20 @@ internal fun reviewNotificationTag(decisionId: Long): String = NOTIFICATION_TAG_
  * request to the exact review date so an older request can never notify after a reschedule,
  * clear, or follow-up review.
  */
-internal fun isCurrentReviewReminder(decision: Decision?, scheduledReviewDate: Long): Boolean =
-    decision?.reviewDate != null && (scheduledReviewDate <= 0L || decision.reviewDate == scheduledReviewDate)
+internal fun isCurrentReviewReminder(
+    decision: Decision?,
+    scheduledReviewDate: Long,
+    scheduledReminderAt: Long = 0L,
+): Boolean = decision?.reviewDate != null &&
+    when {
+        // Releases before the stable date token can still deliver once after upgrade.
+        scheduledReviewDate <= 0L -> true
+        decision.reviewDate != scheduledReviewDate -> false
+        // v8 had a date token only. As soon as v9 has reconciled the record to an evening
+        // reminder, reject that old midnight task even if cancellation raced its execution.
+        scheduledReminderAt <= 0L -> decision.reminderAt == null
+        else -> decision.reminderAt == scheduledReminderAt
+    }
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -53,20 +66,21 @@ interface ReminderWorkerDependencies {
 }
 
 class ReviewReminderScheduler @Inject constructor(@ApplicationContext private val context: Context) {
-    fun scheduleOrCancel(decisionId: Long, reviewDate: Long?): ReminderState {
+    fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState {
         require(decisionId > 0L) { "决定 ID 无效" }
         val workManager = WorkManager.getInstance(context)
         val name = WORK_PREFIX + decisionId
         workManager.cancelUniqueWork(name)
         cancelDeliveredNotification(decisionId)
-        if (reviewDate == null || reviewDate <= System.currentTimeMillis()) return ReminderState.NOT_APPLICABLE
+        if (reviewDate == null || reminderAt == null || reminderAt <= System.currentTimeMillis()) return ReminderState.NOT_APPLICABLE
         notificationAvailability(context)?.let { return it }
         val request = OneTimeWorkRequestBuilder<ReviewReminderWorker>()
-            .setInitialDelay(reviewDate - System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+            .setInitialDelay(reminderAt - System.currentTimeMillis(), TimeUnit.MILLISECONDS)
             .setInputData(
                 Data.Builder()
                     .putLong(DECISION_ID, decisionId)
                     .putLong(SCHEDULED_REVIEW_DATE, reviewDate)
+                    .putLong(SCHEDULED_REMINDER_AT, reminderAt)
                     .build(),
             )
             .build()
@@ -113,6 +127,7 @@ class ReviewReminderWorker(context: Context, params: WorkerParameters) : Corouti
     override suspend fun doWork(): Result {
         val decisionId = inputData.getLong(DECISION_ID, 0L)
         val scheduledReviewDate = inputData.getLong(SCHEDULED_REVIEW_DATE, 0L)
+        val scheduledReminderAt = inputData.getLong(SCHEDULED_REMINDER_AT, 0L)
         if (decisionId <= 0L) return Result.failure()
         return try {
             val dao = EntryPointAccessors.fromApplication(
@@ -121,7 +136,7 @@ class ReviewReminderWorker(context: Context, params: WorkerParameters) : Corouti
             ).decisionDao()
             // Cancellation is asynchronous; verify both the source record and the exact date
             // immediately before posting. This rejects an already-running stale request.
-            if (isStopped || !isCurrentReviewReminder(dao.getById(decisionId), scheduledReviewDate)) {
+            if (isStopped || !isCurrentReviewReminder(dao.getById(decisionId), scheduledReviewDate, scheduledReminderAt)) {
                 return Result.success()
             }
             notificationAvailability(applicationContext)?.let { unavailable ->
