@@ -350,8 +350,8 @@ private fun ChoiceArchiveRow(choice: com.example.decisionjournal.data.model.Choi
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (selected) ChoiceSelectionRail(Modifier.padding(end = 10.dp))
                 Text(choice.text, style = MaterialTheme.typography.titleMedium)
             }

@@ -79,7 +79,8 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                 nav.navigate("decisions?filter=all") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                     launchSingleTop = true
-                    restoreState = true
+                    // The bottom tab means “all decisions”, not “resume the last archive
+                    // filter”. Restoring a saved Due entry here ignored filter=all.
                 }
             }, { ArchiveNavigationIcon(Icons.Rounded.CalendarToday, isDecisionsRoute) }, label = { Text("决定") }, colors = navColors)
             NavigationBarItem(route == "mine", {

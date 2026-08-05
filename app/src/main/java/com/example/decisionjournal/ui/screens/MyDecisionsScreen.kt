@@ -98,7 +98,9 @@ fun MyDecisionsScreen(
     var searchQuery by rememberSaveable(showStats) { mutableStateOf("") }
 
     LaunchedEffect(initialDueFilter) {
-        if (!showStats && initialDueFilter) vm.setFilter(DecisionFilter.Due)
+        // A route is the source of truth for the archive entry point. Without the explicit
+        // All branch, returning through the bottom navigation could retain a stale Due filter.
+        if (!showStats) vm.setFilter(if (initialDueFilter) DecisionFilter.Due else DecisionFilter.All)
     }
     LaunchedEffect(initialSearchQuery, showStats) {
         if (!showStats) searchQuery = initialSearchQuery
@@ -345,7 +347,9 @@ private fun PeriodOverview(
             containerColor = if (custom != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
             hero = custom != null,
             borderColor = if (custom != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.52f) else null,
-            onClick = onCustomRange,
+            // Once a range is active, only the explicit clear button remains actionable. This
+            // avoids nesting an interactive TextButton inside an interactive card for TalkBack.
+            onClick = if (custom == null) onCustomRange else null,
         ) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -356,7 +360,11 @@ private fun PeriodOverview(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                TextButton(onClick = if (custom == null) onCustomRange else onClear) { Text(if (custom == null) "选择" else "清除") }
+                if (custom == null) {
+                    Text("选择", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                } else {
+                    TextButton(onClick = onClear) { Text("清除") }
+                }
             }
         }
         customError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

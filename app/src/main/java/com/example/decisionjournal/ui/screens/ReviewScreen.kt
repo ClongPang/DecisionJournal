@@ -1,7 +1,12 @@
 package com.example.decisionjournal.ui.screens
 
 import android.app.DatePickerDialog
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import com.example.decisionjournal.data.ReviewInput
 import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.data.model.ExpectationMatch
@@ -83,7 +90,13 @@ fun ReviewScreen(
     var nextTimeNote by rememberSaveable { mutableStateOf("") }
     var hasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
     var confirmExit by rememberSaveable { mutableStateOf(false) }
+    var pendingInput by remember { mutableStateOf<ReviewInput?>(null) }
+    var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        pendingInput?.let { vm.save(it, onDone) }
+        pendingInput = null
+    }
     // Do not recreate cold flows on every field edit: doing so restarts their Loading emission
     // and makes the review form visibly flash.
     val decisionStateFlow = remember(vm, decisionId) { vm.decisionState(decisionId) }
@@ -110,6 +123,19 @@ fun ReviewScreen(
     fun requestBack() {
         if (hasUnsavedChanges && vm.saveState != SaveState.Saving) confirmExit = true else onBack()
     }
+    fun saveReview() {
+        val input = ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote)
+        val needsPermission = Build.VERSION.SDK_INT >= 33 &&
+            nextReviewDate != null &&
+            nextReviewDate!! > System.currentTimeMillis() &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            pendingInput = input
+            showNotificationRationale = true
+        } else {
+            vm.save(input, onDone)
+        }
+    }
     BackHandler(onBack = ::requestBack)
     val decision = when (val state = decisionState) {
         DecisionLoadState.Loading -> {
@@ -129,6 +155,7 @@ fun ReviewScreen(
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .imePadding()
+            .navigationBarsPadding()
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
@@ -259,7 +286,7 @@ fun ReviewScreen(
         Spacer(Modifier.height(4.dp))
         PrimaryActionButton(
             if (vm.saveState == SaveState.Saving) "保存中…" else "保存复盘",
-            onClick = { vm.save(ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote), onDone) },
+            onClick = ::saveReview,
             enabled = vm.saveState != SaveState.Saving && result.trim().isNotEmpty() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
     }
@@ -269,6 +296,24 @@ fun ReviewScreen(
         text = { Text("离开后，刚才填写的内容不会保留。") },
         confirmButton = { TextButton(onClick = { confirmExit = false; onBack() }) { Text("放弃") } },
         dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("继续编辑") } },
+    )
+    if (showNotificationRationale) AlertDialog(
+        onDismissRequest = { showNotificationRationale = false },
+        title = { Text("要在下一次回看日提醒你吗？") },
+        text = { Text("提醒仅用于你设置的下一次回看日期。即使不开启通知，这次复盘也会照常保存。") },
+        confirmButton = {
+            TextButton(onClick = {
+                showNotificationRationale = false
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }) { Text("开启提醒") }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                showNotificationRationale = false
+                pendingInput?.let { vm.save(it, onDone) }
+                pendingInput = null
+            }) { Text("仅保存") }
+        },
     )
 }
 

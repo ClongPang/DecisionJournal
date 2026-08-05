@@ -69,7 +69,9 @@ private fun Flow<List<com.example.decisionjournal.data.model.Decision>>.asDecisi
     map< List<com.example.decisionjournal.data.model.Decision>, DecisionListState> { decisions ->
         if (decisions.isEmpty()) DecisionListState.Empty else DecisionListState.Content(decisions)
     }
-        .catch { error -> emit(DecisionListState.Error(error.message ?: "无法读取本机记录")) }
+        // Database and platform exceptions are implementation details. Keep them out of the
+        // archive UI so a recoverable local read failure does not look like data corruption.
+        .catch { emit(DecisionListState.Error("暂时无法读取本机记录，请稍后重试。")) }
 
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
