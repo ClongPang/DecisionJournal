@@ -235,7 +235,7 @@ fun ReviewScreen(
             }
         }
 
-        Text("后来发生了什么？", style = MaterialTheme.typography.headlineSmall)
+        Text("后来发生了什么？", style = MaterialTheme.typography.titleMedium)
         JournalTextField(
             value = result,
             onValueChange = { hasUnsavedChanges = true; vm.clearError(); result = it },
