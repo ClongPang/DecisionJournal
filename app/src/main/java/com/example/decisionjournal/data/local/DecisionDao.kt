@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.ReminderState
 import com.example.decisionjournal.data.model.Review
 import kotlinx.coroutines.flow.Flow
 
@@ -44,6 +45,8 @@ abstract class DecisionDao {
     @Insert abstract suspend fun insertReview(review: Review): Long
     @Query("UPDATE decisions SET reviewDate = :nextReviewDate, status = :status, updatedAt = :updatedAt WHERE id = :id")
     abstract suspend fun updateReviewSchedule(id: Long, nextReviewDate: Long?, status: com.example.decisionjournal.data.model.DecisionStatus, updatedAt: Long): Int
+    @Query("UPDATE decisions SET reminderState = :state WHERE id = :id")
+    abstract suspend fun updateReminderState(id: Long, state: ReminderState): Int
     @Query("DELETE FROM reviews WHERE decisionId = :decisionId") abstract suspend fun deleteReviews(decisionId: Long)
     @Query("DELETE FROM decisions WHERE id = :id") abstract suspend fun deleteDecision(id: Long)
 

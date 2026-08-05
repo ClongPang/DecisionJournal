@@ -3,6 +3,7 @@ package com.example.decisionjournal.data.local
 import androidx.room.TypeConverter
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.data.model.ExpectationMatch
+import com.example.decisionjournal.data.model.ReminderState
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -10,6 +11,9 @@ class DecisionConverters {
     @TypeConverter fun fromStatus(value: DecisionStatus): String = value.name
     @TypeConverter fun toStatus(value: String): DecisionStatus =
         runCatching { DecisionStatus.valueOf(value) }.getOrDefault(DecisionStatus.ACTIVE)
+    @TypeConverter fun fromReminderState(value: ReminderState): String = value.name
+    @TypeConverter fun toReminderState(value: String): ReminderState =
+        runCatching { ReminderState.valueOf(value) }.getOrDefault(ReminderState.NOT_APPLICABLE)
     @TypeConverter fun fromExpectationMatch(value: ExpectationMatch?): String? = value?.name
     @TypeConverter fun toExpectationMatch(value: String?): ExpectationMatch? =
         value?.let { runCatching { ExpectationMatch.valueOf(it) }.getOrNull() }

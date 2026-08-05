@@ -158,6 +158,10 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     reminderWarning = reminderWarning,
                     savedMessage = savedMessage,
                     onSavedMessageConsumed = { entry.savedStateHandle["savedMessage"] = "" },
+                    onReminderRestored = { message ->
+                        entry.savedStateHandle["reminderWarning"] = false
+                        entry.savedStateHandle["savedMessage"] = message
+                    },
                     onReview = { nav.navigate("review/$id") },
                     onEdit = { nav.navigate("create?decisionId=$id") },
                     onBack = ::navigateBackOrHome,

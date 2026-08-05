@@ -185,6 +185,8 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var reminderError: String? by mutableStateOf(null)
         private set
+    var reminderRestored by mutableStateOf(false)
+        private set
     var deleting by mutableStateOf(false)
         private set
     var deleteError: String? by mutableStateOf(null)
@@ -194,6 +196,10 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
         .onStart { emit(DecisionLoadState.Loading) }
     fun choices(id: Long) = repo.choices(id)
     fun reviews(id: Long) = repo.reviews(id)
+    fun refreshReminderState(id: Long) = viewModelScope.launch {
+        if (repo.refreshReminderState(id)) reminderRestored = true
+    }
+    fun consumeReminderRestored() { reminderRestored = false }
     fun delete(id: Long, done: () -> Unit) = viewModelScope.launch {
         deleting = true
         deleteError = null

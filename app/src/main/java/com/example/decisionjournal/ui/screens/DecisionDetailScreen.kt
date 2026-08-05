@@ -1,6 +1,7 @@
 package com.example.decisionjournal.ui.screens
 
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,9 +41,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.REVIEW_REMINDER_CHANNEL_ID
 import com.example.decisionjournal.ui.DetailViewModel
 import com.example.decisionjournal.ui.DecisionLoadState
 import com.example.decisionjournal.ui.components.JournalTopBar
@@ -70,6 +76,7 @@ fun DecisionDetailScreen(
     reminderWarning: Boolean = false,
     savedMessage: String = "",
     onSavedMessageConsumed: () -> Unit = {},
+    onReminderRestored: (String) -> Unit = {},
     onReview: () -> Unit,
     onEdit: () -> Unit,
     onBack: () -> Unit,
@@ -77,6 +84,7 @@ fun DecisionDetailScreen(
     vm: DetailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     // ViewModel helpers create cold flows. Remember them so recomposition does not cancel a
     // collector, create another flow, and briefly send this page back to Loading.
     val decisionStateFlow = remember(vm, id) { vm.decisionState(id) }
@@ -96,11 +104,34 @@ fun DecisionDetailScreen(
             onSavedMessageConsumed()
         }
     }
+    LaunchedEffect(vm.reminderRestored) {
+        if (vm.reminderRestored) {
+            delay(2_200)
+            vm.consumeReminderRestored()
+        }
+    }
+    LaunchedEffect(id) {
+        // A user can disable notifications while the app is backgrounded. Refresh the persisted
+        // delivery state when the detail page is entered so the next action is understandable.
+        vm.refreshReminderState(id)
+    }
+    DisposableEffect(lifecycleOwner, id) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) vm.refreshReminderState(id)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     fun openNotificationSettings() {
-        context.startActivity(
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, REVIEW_REMINDER_CHANNEL_ID)
+        } else {
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-        )
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+        context.startActivity(intent)
     }
     val decision = when (val state = decisionState) {
         DecisionLoadState.Loading -> {
@@ -138,7 +169,21 @@ fun DecisionDetailScreen(
             }
         }
 
-        if (showReminderWarning || vm.reminderError != null) {
+        if (vm.reminderRestored) {
+            SoftSurfaceCard(
+                modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                containerColor = MistGreen,
+            ) {
+                Text(
+                    "复盘提醒已恢复，将在 ${formatDate(decision.reviewDate ?: System.currentTimeMillis())} 提醒你。",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
+        if (showReminderWarning || decision.reminderState.needsAttention || vm.reminderError != null) {
             SoftSurfaceCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MistSand,
@@ -150,12 +195,18 @@ fun DecisionDetailScreen(
                         Text("提醒尚未安排", style = MaterialTheme.typography.titleMedium, color = MutedTerracotta)
                     }
                     Text(
-                        vm.reminderError ?: "内容已保存，但复盘提醒未安排。",
+                        vm.reminderError ?: decision.reminderState.userMessage ?: "内容已保存，但复盘提醒未安排。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     OutlinedButton(
-                        onClick = { vm.retryReminder(id) { showReminderWarning = false } },
+                        onClick = {
+                            vm.retryReminder(id) {
+                                showReminderWarning = false
+                                val whenText = decision.reviewDate?.let { "，将在 ${formatDate(it)} 提醒你" }.orEmpty()
+                                onReminderRestored("复盘提醒已恢复$whenText")
+                            }
+                        },
                         enabled = !vm.reminderRetrying,
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         border = BorderStroke(1.dp, MutedTerracotta.copy(alpha = 0.68f)),

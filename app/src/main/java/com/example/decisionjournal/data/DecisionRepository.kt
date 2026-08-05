@@ -5,6 +5,7 @@ import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.ExpectationMatch
+import com.example.decisionjournal.data.model.ReminderState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -110,9 +111,8 @@ class DecisionRepository @Inject constructor(
             selectedChoiceId = selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
-        val warning = capture { reminderScheduler.scheduleOrCancel(id, input.reviewDate) }
-            .exceptionOrNull()
-            ?.let { "内容已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
+        val reminderState = updateReminderState(id, input.reviewDate)
+        val warning = reminderWarning("内容已保存", reminderState)
         SaveOutcome(id, warning)
     }
     suspend fun review(input: ReviewInput): Result<SaveOutcome> = capture {
@@ -132,16 +132,32 @@ class DecisionRepository @Inject constructor(
             input.nextReviewDate,
             System.currentTimeMillis(),
         )
-        val warning = capture { reminderScheduler.scheduleOrCancel(input.decisionId, input.nextReviewDate) }
-            .exceptionOrNull()
-            ?.let { "复盘已保存，但提醒未安排：${it.message ?: "系统未能创建提醒"}" }
+        val reminderState = updateReminderState(input.decisionId, input.nextReviewDate)
+        val warning = reminderWarning("复盘已保存", reminderState)
         SaveOutcome(id, warning)
     }
 
     suspend fun retryReminder(decisionId: Long): Result<Unit> = capture {
         val decision = dao.getById(decisionId) ?: error("这条决定不存在或已被删除")
-        reminderScheduler.scheduleOrCancel(decisionId, decision.reviewDate)
+        require(decision.reviewDate != null && decision.reviewDate > System.currentTimeMillis()) {
+            "回看日期已过，无法再安排提醒"
+        }
+        val state = updateReminderState(decisionId, decision.reviewDate)
+        require(state == ReminderState.SCHEDULED) { state.userMessage ?: "暂时无法安排提醒，请稍后重试。" }
     }
+
+    suspend fun refreshReminderState(decisionId: Long): Boolean =
+        capture {
+            val decision = dao.getById(decisionId) ?: return@capture false
+            val reviewDate = decision.reviewDate ?: return@capture false
+            if (reviewDate <= System.currentTimeMillis()) return@capture false
+            val state = reminderScheduler.notificationAvailability() ?: ReminderState.SCHEDULED
+            if (state != decision.reminderState) {
+                check(dao.updateReminderState(decisionId, state) == 1) { "更新提醒状态失败" }
+            }
+            decision.reminderState.needsAttention && state == ReminderState.SCHEDULED
+        }.getOrDefault(false)
+
     suspend fun delete(id: Long) {
         // A scheduler failure must not leave the user's local record undeletable.
         try {
@@ -153,4 +169,14 @@ class DecisionRepository @Inject constructor(
         }
         dao.deleteCascade(id)
     }
+
+    private suspend fun updateReminderState(decisionId: Long, reviewDate: Long?): ReminderState {
+        val state = capture { reminderScheduler.scheduleOrCancel(decisionId, reviewDate) }
+            .getOrDefault(ReminderState.SCHEDULING_FAILED)
+        check(dao.updateReminderState(decisionId, state) == 1) { "更新提醒状态失败" }
+        return state
+    }
+
+    private fun reminderWarning(savedLabel: String, state: ReminderState): String? =
+        state.userMessage?.let { "$savedLabel，但提醒未安排：$it" }
 }

@@ -122,4 +122,59 @@ class DecisionDaoTest {
         assertTrue(choicesIndex.contains("index_choices_decisionId"))
         assertTrue(reviewsIndex.contains("index_reviews_decisionId"))
     }
+
+    @Test
+    fun migrationFrom7PreservesExistingDecisionsAndAddsReminderState() = runBlocking {
+        val databaseName = "decision-migration-7-8"
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.deleteDatabase(databaseName)
+        val version7 = context.openOrCreateDatabase(databaseName, Context.MODE_PRIVATE, null)
+        version7.execSQL(
+            """
+            CREATE TABLE decisions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, question TEXT NOT NULL,
+                context TEXT, benefits TEXT NOT NULL, concerns TEXT NOT NULL, futureNote TEXT,
+                expectedOutcome TEXT, confidence INTEGER, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL,
+                decisionDate INTEGER NOT NULL, reviewDate INTEGER, status TEXT NOT NULL, selectedChoiceId INTEGER)
+            """.trimIndent(),
+        )
+        version7.execSQL(
+            """
+            CREATE TABLE choices (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, decisionId INTEGER NOT NULL,
+                text TEXT NOT NULL, benefits TEXT NOT NULL, concerns TEXT NOT NULL, position INTEGER NOT NULL)
+            """.trimIndent(),
+        )
+        version7.execSQL(
+            """
+            CREATE TABLE reviews (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, decisionId INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL, result TEXT NOT NULL, satisfaction INTEGER, expectationMatch TEXT,
+                accurateJudgment TEXT, unexpectedFinding TEXT, nextTimeNote TEXT)
+            """.trimIndent(),
+        )
+        version7.execSQL("CREATE INDEX index_choices_decisionId ON choices (decisionId)")
+        version7.execSQL("CREATE INDEX index_reviews_decisionId ON reviews (decisionId)")
+        version7.execSQL("CREATE INDEX index_decisions_decisionDate ON decisions (decisionDate)")
+        version7.execSQL("CREATE INDEX index_decisions_reviewDate_status ON decisions (reviewDate, status)")
+        version7.execSQL(
+            """
+            INSERT INTO decisions (id, question, context, benefits, concerns, futureNote, expectedOutcome,
+                confidence, createdAt, updatedAt, decisionDate, reviewDate, status, selectedChoiceId)
+            VALUES (1, '旧决定', NULL, '', '', NULL, NULL, NULL, 10, 10, 10, 20, 'ACTIVE', NULL)
+            """.trimIndent(),
+        )
+        version7.version = 7
+        version7.close()
+
+        val migrated = Room.databaseBuilder(context, DecisionDatabase::class.java, databaseName)
+            .addMigrations(DecisionDatabase.MIGRATION_7_8)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val saved = migrated.decisionDao().getById(1)
+            assertEquals("旧决定", saved?.question)
+            assertEquals("NOT_APPLICABLE", saved?.reminderState?.name)
+        } finally {
+            migrated.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
 }
