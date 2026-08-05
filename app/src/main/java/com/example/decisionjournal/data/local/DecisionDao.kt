@@ -38,11 +38,18 @@ abstract class DecisionDao {
     @Query("SELECT * FROM reviews ORDER BY decisionId ASC, createdAt DESC")
     abstract fun observeAllReviews(): Flow<List<Review>>
 
+    @Query("SELECT DISTINCT decisionId FROM reviews")
+    abstract fun observeReviewedDecisionIds(): Flow<List<Long>>
+
     @Insert abstract suspend fun insertDecision(decision: Decision): Long
     @Update abstract suspend fun updateDecision(decision: Decision): Int
     @Insert abstract suspend fun insertChoices(choices: List<Choice>): List<Long>
     @Query("DELETE FROM choices WHERE decisionId = :decisionId") abstract suspend fun deleteChoices(decisionId: Long)
     @Insert abstract suspend fun insertReview(review: Review): Long
+    @Update abstract suspend fun updateReview(review: Review): Int
+    @Query("SELECT * FROM reviews WHERE id = :id") abstract suspend fun getReview(id: Long): Review?
+    @Query("DELETE FROM reviews WHERE id = :reviewId AND decisionId = :decisionId") abstract suspend fun deleteReview(reviewId: Long, decisionId: Long): Int
+    @Query("SELECT COUNT(*) FROM reviews WHERE decisionId = :decisionId") abstract suspend fun countReviews(decisionId: Long): Int
     @Query("UPDATE decisions SET reviewDate = :nextReviewDate, reviewDateKey = :nextReviewDateKey, reminderAt = :nextReminderAt, status = :status, updatedAt = :updatedAt WHERE id = :id")
     abstract suspend fun updateReviewSchedule(id: Long, nextReviewDate: Long?, nextReminderAt: Long?, nextReviewDateKey: String?, status: com.example.decisionjournal.data.model.DecisionStatus, updatedAt: Long): Int
     @Query("UPDATE decisions SET reminderAt = :reminderAt, reviewDateKey = :reviewDateKey WHERE id = :id")
@@ -51,6 +58,16 @@ abstract class DecisionDao {
     abstract suspend fun updateReminderState(id: Long, state: ReminderState): Int
     @Query("DELETE FROM reviews WHERE decisionId = :decisionId") abstract suspend fun deleteReviews(decisionId: Long)
     @Query("DELETE FROM decisions WHERE id = :id") abstract suspend fun deleteDecision(id: Long)
+
+    @Transaction
+    open suspend fun deleteReviewAndUpdateDecision(reviewId: Long, decisionId: Long, nextReviewDate: Long?, nextReviewDateKey: String?, updatedAt: Long): Int {
+        check(getById(decisionId) != null) { "这条决定不存在或已被删除" }
+        check(deleteReview(reviewId, decisionId) == 1) { "这条复盘不存在或已被删除" }
+        val remaining = countReviews(decisionId)
+        val current = getById(decisionId) ?: error("这条决定不存在或已被删除")
+        val date = if (remaining == 0 && nextReviewDate == null) null else nextReviewDate
+        return updateReviewSchedule(decisionId, date, if (date == null) null else current.reminderAt, if (date == null) null else nextReviewDateKey, if (date == null) com.example.decisionjournal.data.model.DecisionStatus.ACTIVE else current.status, updatedAt)
+    }
 
     @Transaction
     open suspend fun saveReview(review: Review, nextReviewDate: Long?, nextReminderAt: Long?, nextReviewDateKey: String?, updatedAt: Long): Long {

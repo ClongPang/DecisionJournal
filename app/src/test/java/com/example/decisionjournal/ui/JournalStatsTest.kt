@@ -95,16 +95,20 @@ class JournalStatsTest {
         fun at(day: LocalDate): Long = day.atStartOfDay(zone).toInstant().toEpochMilli()
         val now = at(date)
         val decisions = listOf(
-            Decision(question = "待回看", reviewDate = at(date.minusDays(1))),
-            Decision(question = "等待中", reviewDate = at(date.plusDays(7))),
-            Decision(question = "已回看", status = DecisionStatus.REVIEWED),
-            Decision(question = "未设日期"),
+            Decision(id = 1, question = "待回看", reviewDate = at(date.minusDays(1))),
+            Decision(id = 2, question = "等待中", reviewDate = at(date.plusDays(7))),
+            Decision(id = 3, question = "已回看", status = DecisionStatus.REVIEWED),
+            Decision(id = 4, question = "未设日期"),
         )
 
         assertEquals(DecisionStatusCounts(1, 1, 1, 1), calculateDecisionStatusCounts(decisions, now))
         assertEquals(listOf("等待中"), filterDecisions(decisions, DecisionFilter.Upcoming, date, zone, now).map { it.question })
         assertEquals(listOf("已回看"), filterDecisions(decisions, DecisionFilter.Reviewed, date, zone, now).map { it.question })
         assertEquals(listOf("未设日期"), filterDecisions(decisions, DecisionFilter.Unscheduled, date, zone, now).map { it.question })
+        assertEquals(
+            listOf("已回看", "等待中"),
+            filterDecisions(decisions, DecisionFilter.HasReviews, date, zone, now, setOf(decisions[1].id, decisions[2].id)).map { it.question },
+        )
     }
 
     @Test

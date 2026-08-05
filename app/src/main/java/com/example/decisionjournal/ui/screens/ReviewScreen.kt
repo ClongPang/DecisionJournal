@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +79,7 @@ private val expectationMatchSaver: Saver<ExpectationMatch?, String> = Saver(
 @Composable
 fun ReviewScreen(
     decisionId: Long,
+    reviewId: Long? = null,
     onDone: (SaveOutcome) -> Unit,
     onBack: () -> Unit,
     onReturnHome: () -> Unit = onBack,
@@ -95,6 +97,7 @@ fun ReviewScreen(
     var confirmExit by rememberSaveable { mutableStateOf(false) }
     var pendingInput by remember { mutableStateOf<ReviewInput?>(null) }
     var showNotificationRationale by rememberSaveable { mutableStateOf(false) }
+    var initializedReviewId by rememberSaveable { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         pendingInput?.let { vm.save(it, onDone) }
@@ -108,6 +111,22 @@ fun ReviewScreen(
     val decisionState by decisionStateFlow.collectAsStateWithLifecycle(DecisionLoadState.Loading)
     val choices by choicesFlow.collectAsStateWithLifecycle(emptyList())
     val reviews by reviewsFlow.collectAsStateWithLifecycle(emptyList())
+
+    LaunchedEffect(reviewId, reviews, decisionState) {
+        if (reviewId != null && initializedReviewId != reviewId) {
+            val existing = reviews.firstOrNull { it.id == reviewId } ?: return@LaunchedEffect
+            result = existing.result
+            satisfaction = existing.satisfaction?.toString().orEmpty()
+            expectationMatch = existing.expectationMatch
+            accurateJudgment = existing.accurateJudgment.orEmpty()
+            unexpectedFinding = existing.unexpectedFinding.orEmpty()
+            nextTimeNote = existing.nextTimeNote.orEmpty()
+            nextReviewDate = (decisionState as? DecisionLoadState.Content)?.decision?.reviewDate
+            nextReviewDateCalendarKey = (decisionState as? DecisionLoadState.Content)?.decision?.reviewDateKey
+            initializedReviewId = reviewId
+            hasUnsavedChanges = false
+        }
+    }
 
     fun showDatePicker() {
         val date = nextReviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
@@ -128,7 +147,7 @@ fun ReviewScreen(
         if (hasUnsavedChanges && vm.saveState != SaveState.Saving) confirmExit = true else onBack()
     }
     fun saveReview() {
-        val input = ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote, nextReviewDateCalendarKey)
+        val input = ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote, nextReviewDateCalendarKey, reviewId)
         val needsPermission = Build.VERSION.SDK_INT >= 33 &&
             nextReviewDate != null &&
             (nextReviewDateCalendarKey?.let { LocalDate.parse(it).isAfter(LocalDate.now()) } ?: (nextReviewDate!! > System.currentTimeMillis())) &&
@@ -150,6 +169,10 @@ fun ReviewScreen(
             ReviewStatePage("这条决定可能已被删除，无法记录复盘。", onBack, onReturnHome, missing = true)
             return
         }
+        is DecisionLoadState.Error -> {
+            ReviewStatePage(state.message, onBack, retry = vm::retry)
+            return
+        }
         is DecisionLoadState.Content -> state.decision
     }
 
@@ -163,7 +186,7 @@ fun ReviewScreen(
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
-        JournalTopBar(title = "后来", subtitle = "把事情后来走到哪里写下来", onBack = ::requestBack)
+        JournalTopBar(title = if (reviewId == null) "后来" else "更正回看", subtitle = "把事情后来走到哪里写下来", onBack = ::requestBack)
         decision.let { current ->
             val selectedChoice = choices.firstOrNull { it.id == current.selectedChoiceId }
             SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
@@ -197,7 +220,7 @@ fun ReviewScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            "本次保存会追加一条新记录，不会覆盖之前的观察。",
+                            if (reviewId == null) "本次保存会追加一条新记录，不会覆盖之前的观察。" else "这次保存会更正原记录，保留原来的日期和时间线位置。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -307,7 +330,7 @@ fun ReviewScreen(
         vm.error?.let { JournalErrorText(it) }
         Spacer(Modifier.height(4.dp))
         PrimaryActionButton(
-            if (vm.saveState == SaveState.Saving) "保存中…" else "保存复盘",
+            if (vm.saveState == SaveState.Saving) "保存中…" else if (reviewId == null) "保存复盘" else "保存更正",
             onClick = ::saveReview,
             enabled = vm.saveState != SaveState.Saving && result.trim().isNotEmpty() && (satisfaction.isBlank() || satisfaction.toIntOrNull() in 1..5),
         )
@@ -349,6 +372,7 @@ private fun ReviewStatePage(
     onBack: () -> Unit,
     onReturnHome: () -> Unit = onBack,
     missing: Boolean = false,
+    retry: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -363,6 +387,7 @@ private fun ReviewStatePage(
                 Text(if (missing) "无法记录复盘" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                 if (missing) TextButton(onClick = onReturnHome) { Text("回到今天") }
+                if (!missing && retry != null) TextButton(onClick = retry) { Text("重试") }
             }
         }
     }

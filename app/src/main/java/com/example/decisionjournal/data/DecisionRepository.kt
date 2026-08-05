@@ -40,6 +40,7 @@ data class ReviewInput(
     val unexpectedFinding: String? = null,
     val nextTimeNote: String? = null,
     val nextReviewDateKey: String? = null,
+    val reviewId: Long? = null,
 )
 data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
 data class DecisionSearchFields(val decisionId: Long, val terms: List<String>)
@@ -58,6 +59,7 @@ class DecisionRepository @Inject constructor(
     private val reminderScheduler: ReviewReminderScheduler,
 ) {
     val decisions = dao.observeAll()
+    val reviewedDecisionIds = dao.observeReviewedDecisionIds().map { it.toSet() }
     val searchFields = combine(dao.observeAllChoices(), dao.observeAllReviews()) { choices, reviews ->
         val termsByDecision = linkedMapOf<Long, MutableList<String>>()
         choices.forEach { choice ->
@@ -129,29 +131,43 @@ class DecisionRepository @Inject constructor(
         SaveOutcome(id, warning)
     }
     suspend fun review(input: ReviewInput): Result<SaveOutcome> = capture {
-        val validationError = ReviewValidation.validate(input)
+        val existingDecision = dao.getById(input.decisionId)
+        val validationError = ReviewValidation.validate(if (input.reviewId != null) input.copy(nextReviewDate = null) else input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
-        require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
-        val normalizedNextReviewDateKey = input.nextReviewDateKey ?: reviewDateKey(input.nextReviewDate)
-        val reminderAt = reviewReminderAt(input.nextReviewDate, reviewDateKey = normalizedNextReviewDateKey)
-        val id = dao.saveReview(
-            Review(
-                decisionId = input.decisionId,
-                result = input.result.trim(),
-                satisfaction = input.satisfaction,
-                expectationMatch = input.expectationMatch,
-                accurateJudgment = input.accurateJudgment?.trim()?.takeIf { it.isNotEmpty() },
-                unexpectedFinding = input.unexpectedFinding?.trim()?.takeIf { it.isNotEmpty() },
-                nextTimeNote = input.nextTimeNote?.trim()?.takeIf { it.isNotEmpty() },
-            ),
-            input.nextReviewDate,
-            reminderAt,
-            normalizedNextReviewDateKey,
-            System.currentTimeMillis(),
+        require(existingDecision != null) { "这条决定不存在或已被删除" }
+        val scheduleDate = if (input.reviewId != null) existingDecision.reviewDate else input.nextReviewDate
+        val scheduleKey = if (input.reviewId != null) existingDecision.reviewDateKey else input.nextReviewDateKey
+        val normalizedNextReviewDateKey = scheduleKey ?: reviewDateKey(scheduleDate)
+        val reminderAt = reviewReminderAt(scheduleDate, reviewDateKey = normalizedNextReviewDateKey)
+        val review = Review(
+            id = input.reviewId ?: 0L,
+            decisionId = input.decisionId,
+            createdAt = input.reviewId?.let { dao.getReview(it)?.createdAt } ?: System.currentTimeMillis(),
+            result = input.result.trim(),
+            satisfaction = input.satisfaction,
+            expectationMatch = input.expectationMatch,
+            accurateJudgment = input.accurateJudgment?.trim()?.takeIf { it.isNotEmpty() },
+            unexpectedFinding = input.unexpectedFinding?.trim()?.takeIf { it.isNotEmpty() },
+            nextTimeNote = input.nextTimeNote?.trim()?.takeIf { it.isNotEmpty() },
         )
-        val reminderState = updateReminderState(input.decisionId, input.nextReviewDate, reminderAt)
+        val id = if (input.reviewId == null) {
+            dao.saveReview(review, scheduleDate, reminderAt, normalizedNextReviewDateKey, System.currentTimeMillis())
+        } else {
+            require(review.createdAt > 0L) { "这条复盘不存在或已被删除" }
+            check(dao.updateReview(review) == 1) { "更新复盘失败" }
+            input.reviewId
+        }
+        val reminderState = if (input.reviewId != null) existingDecision.reminderState else updateReminderState(input.decisionId, scheduleDate, reminderAt)
         val warning = reminderWarning("复盘已保存", reminderState)
         SaveOutcome(id, warning)
+    }
+
+    suspend fun deleteReview(reviewId: Long, decisionId: Long, clearNextReview: Boolean): Result<Unit> = capture {
+        val decision = dao.getById(decisionId) ?: error("这条决定不存在或已被删除")
+        check(dao.deleteReviewAndUpdateDecision(reviewId, decisionId, if (clearNextReview) null else decision.reviewDate, if (clearNextReview) null else decision.reviewDateKey, System.currentTimeMillis()) == 1) {
+            "删除复盘失败"
+        }
+        if (clearNextReview) updateReminderState(decisionId, null, null)
     }
 
     suspend fun retryReminder(decisionId: Long): Result<Unit> = capture {

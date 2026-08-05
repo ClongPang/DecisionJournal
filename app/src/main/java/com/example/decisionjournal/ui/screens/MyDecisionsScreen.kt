@@ -155,6 +155,7 @@ fun MyDecisionsScreen(
         DecisionFilter.Due -> "待回看的决定"
         DecisionFilter.Upcoming -> "等待回看的决定"
         DecisionFilter.Reviewed -> "已回看的决定"
+        DecisionFilter.HasReviews -> "已有复盘的决定"
         DecisionFilter.Unscheduled -> "尚未设置日期的决定"
         is DecisionFilter.Preset -> "${filter.period.label()}的决定"
         is DecisionFilter.Custom -> "指定范围内的决定"
@@ -337,6 +338,10 @@ private fun PeriodOverview(
                 StatusFilterChip("已回看", statusCounts.reviewed, selectedFilter == DecisionFilter.Reviewed, onClick = { onSelectStatus(DecisionFilter.Reviewed) }, modifier = Modifier.weight(1f))
                 StatusFilterChip("未设日期", statusCounts.unscheduled, selectedFilter == DecisionFilter.Unscheduled, onClick = { onSelectStatus(DecisionFilter.Unscheduled) }, modifier = Modifier.weight(1f))
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusFilterChip("已有复盘", statusCounts.hasReviews, selectedFilter == DecisionFilter.HasReviews, onClick = { onSelectStatus(DecisionFilter.HasReviews) }, modifier = Modifier.weight(1f))
+                Spacer(Modifier.weight(1f))
+            }
         }
         ArchiveKicker("按时间回看")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -395,6 +400,7 @@ private fun DecisionFilter.label(): String = when (this) {
     DecisionFilter.Due -> "只看待回看"
     DecisionFilter.Upcoming -> "只看等待中"
     DecisionFilter.Reviewed -> "只看已回看"
+    DecisionFilter.HasReviews -> "只看已有复盘"
     DecisionFilter.Unscheduled -> "只看未设日期"
     else -> "筛选结果"
 }

@@ -50,12 +50,14 @@ sealed interface DecisionEditorState {
     data object Loading : DecisionEditorState
     data object Missing : DecisionEditorState
     data class Content(val data: com.example.decisionjournal.data.DecisionEditorData) : DecisionEditorState
+    data class Error(val message: String) : DecisionEditorState
 }
 
 sealed interface DecisionLoadState {
     data object Loading : DecisionLoadState
     data object Missing : DecisionLoadState
     data class Content(val decision: com.example.decisionjournal.data.model.Decision) : DecisionLoadState
+    data class Error(val message: String) : DecisionLoadState
 }
 
 sealed interface DecisionListState {
@@ -107,6 +109,7 @@ class DecisionsViewModel @Inject constructor(repo: DecisionRepository) : ViewMod
         (state as? DecisionListState.Content)?.decisions.orEmpty()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val searchFields = repo.searchFields.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val reviewedDecisionIds = repo.reviewedDecisionIds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
     val now = minuteClock().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
     val stats = combine(decisions, now) { items, currentTime -> calculateDecisionStats(items, currentTime) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionStats(0, 0, null))
@@ -115,11 +118,11 @@ class DecisionsViewModel @Inject constructor(repo: DecisionRepository) : ViewMod
     val periodCounts = combine(decisions, now)
         { items, currentTime -> calculatePeriodCounts(items, currentDate(currentTime), ZoneId.systemDefault()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PeriodCounts())
-    val statusCounts = combine(decisions, now)
-        { items, currentTime -> calculateDecisionStatusCounts(items, currentTime) }
+    val statusCounts = combine(decisions, now, reviewedDecisionIds)
+        { items, currentTime, reviewedIds -> calculateDecisionStatusCounts(items, currentTime).copy(hasReviews = items.count { reviewedIds.contains(it.id) }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionStatusCounts())
-    val filteredDecisions = combine(decisions, filter, now) { items, currentFilter, currentTime ->
-        filterDecisions(items, currentFilter, currentDate(currentTime), ZoneId.systemDefault(), currentTime)
+    val filteredDecisions = combine(decisions, filter, now, reviewedDecisionIds) { items, currentFilter, currentTime, reviewedIds ->
+        filterDecisions(items, currentFilter, currentDate(currentTime), ZoneId.systemDefault(), currentTime, reviewedIds)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun selectFilter(value: DecisionFilter) {
@@ -141,7 +144,9 @@ private fun currentDate(timestamp: Long): LocalDate =
     java.time.Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepository) : ViewModel() {
+    private val refresh = MutableStateFlow(0)
     var error: String? by mutableStateOf(null)
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
@@ -176,14 +181,18 @@ class CreateDecisionViewModel @Inject constructor(private val repo: DecisionRepo
             }
     }
     fun decision(id: Long) = repo.observe(id)
-    fun editor(id: Long) = repo.editor(id)
+    fun editor(id: Long) = refresh.flatMapLatest { repo.editor(id) }
         .map { data -> data?.let(DecisionEditorState::Content) ?: DecisionEditorState.Missing }
         .onStart { emit(DecisionEditorState.Loading) }
+        .catch { emit(DecisionEditorState.Error("暂时无法读取本机记录，请稍后重试。")) }
     fun choices(id: Long) = repo.choices(id)
+    fun retry() { refresh.value += 1 }
 }
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel @Inject constructor(private val repo: DecisionRepository) : ViewModel() {
+    private val refresh = MutableStateFlow(0)
     val now = minuteClock().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
     var reminderRetrying by mutableStateOf(false)
         private set
@@ -195,9 +204,13 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
         private set
     var deleteError: String? by mutableStateOf(null)
         private set
-    fun decisionState(id: Long) = repo.observe(id)
+    var reviewDeleteError: String? by mutableStateOf(null)
+        private set
+    fun decisionState(id: Long) = refresh.flatMapLatest { repo.observe(id) }
         .map { decision -> decision?.let(DecisionLoadState::Content) ?: DecisionLoadState.Missing }
         .onStart { emit(DecisionLoadState.Loading) }
+        .catch { emit(DecisionLoadState.Error("暂时无法读取本机记录，请稍后重试。")) }
+    fun retry() { refresh.value += 1 }
     fun choices(id: Long) = repo.choices(id)
     fun reviews(id: Long) = repo.reviews(id)
     fun refreshReminderState(id: Long) = viewModelScope.launch {
@@ -225,10 +238,19 @@ class DetailViewModel @Inject constructor(private val repo: DecisionRepository) 
             .onFailure { reminderError = it.message ?: "提醒安排失败" }
         reminderRetrying = false
     }
+
+    fun deleteReview(reviewId: Long, decisionId: Long, clearNextReview: Boolean, done: () -> Unit = {}) = viewModelScope.launch {
+        reviewDeleteError = null
+        repo.deleteReview(reviewId, decisionId, clearNextReview)
+            .onSuccess { done() }
+            .onFailure { reviewDeleteError = it.message ?: "删除复盘失败，请稍后重试" }
+    }
 }
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReviewViewModel @Inject constructor(private val repo: DecisionRepository) : ViewModel() {
+    private val refresh = MutableStateFlow(0)
     var error: String? by mutableStateOf(null)
         private set
     var saveState: SaveState by mutableStateOf(SaveState.Idle)
@@ -238,9 +260,11 @@ class ReviewViewModel @Inject constructor(private val repo: DecisionRepository) 
         error = null
         if (saveState is SaveState.Error) saveState = SaveState.Idle
     }
-    fun decisionState(id: Long) = repo.observe(id)
+    fun decisionState(id: Long) = refresh.flatMapLatest { repo.observe(id) }
         .map { decision -> decision?.let(DecisionLoadState::Content) ?: DecisionLoadState.Missing }
         .onStart { emit(DecisionLoadState.Loading) }
+        .catch { emit(DecisionLoadState.Error("暂时无法读取本机记录，请稍后重试。")) }
+    fun retry() { refresh.value += 1 }
     fun choices(id: Long) = repo.choices(id)
     fun reviews(id: Long) = repo.reviews(id)
     fun save(input: ReviewInput, done: (SaveOutcome) -> Unit) = viewModelScope.launch {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -84,6 +85,7 @@ fun DecisionDetailScreen(
     onSavedMessageConsumed: () -> Unit = {},
     onReminderRestored: (String) -> Unit = {},
     onReview: () -> Unit,
+    onEditReview: (Long) -> Unit = {},
     onEdit: () -> Unit,
     onBack: () -> Unit,
     onReturnHome: () -> Unit = onBack,
@@ -103,6 +105,8 @@ fun DecisionDetailScreen(
     var showReminderWarning by remember(reminderWarning) { mutableStateOf(reminderWarning) }
     var visibleSavedMessage by remember(savedMessage) { mutableStateOf(savedMessage) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var reviewToDelete by remember { mutableStateOf<Review?>(null) }
+    var clearNextReviewOnDelete by remember { mutableStateOf(false) }
     LaunchedEffect(savedMessage) {
         if (savedMessage.isNotBlank()) {
             delay(2_200)
@@ -148,6 +152,10 @@ fun DecisionDetailScreen(
             DecisionStatePage("这一次决定", "这条决定可能已被删除，或链接已经失效。", onBack, onReturnHome, missing = true)
             return
         }
+        is DecisionLoadState.Error -> {
+            DecisionStatePage("这一次决定", state.message, onBack, retry = vm::retry)
+            return
+        }
         is DecisionLoadState.Content -> state.decision
     }
 
@@ -156,6 +164,7 @@ fun DecisionDetailScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
@@ -227,6 +236,7 @@ fun DecisionDetailScreen(
             }
         }
         vm.deleteError?.let { JournalErrorText(it) }
+        vm.reviewDeleteError?.let { JournalErrorText(it) }
 
         decision.let { d ->
             val reviewed = d.status == DecisionStatus.REVIEWED
@@ -347,10 +357,12 @@ fun DecisionDetailScreen(
                         review = review,
                         previousEventAt = reviews.getOrNull(index + 1)?.createdAt ?: d.decisionDate,
                         highlight = index == 0,
+                        onEdit = { onEditReview(review.id) },
+                        onDelete = { reviewToDelete = review; clearNextReviewOnDelete = false },
                     )
                 }
             }
-            TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                 Text("删除此决定", color = MaterialTheme.colorScheme.error)
             }
         }
@@ -363,6 +375,30 @@ fun DecisionDetailScreen(
         confirmButton = { TextButton(enabled = !vm.deleting, onClick = { confirmDelete = false; vm.delete(id, onBack) }) { Text(if (vm.deleting) "删除中…" else "删除") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
     )
+    reviewToDelete?.let { review ->
+        AlertDialog(
+            onDismissRequest = { reviewToDelete = null },
+            title = { Text("删除这次回看？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("这次回看会从时间线、搜索和洞察中移除。")
+                    if (decision.reviewDate != null) {
+                        Text("当前的下一次回看安排默认保留。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { clearNextReviewOnDelete = !clearNextReviewOnDelete }) {
+                            Text(if (clearNextReviewOnDelete) "将同时清除下一次回看" else "同时清除下一次回看")
+                        }
+                    }
+                    vm.reviewDeleteError?.let { JournalErrorText(it) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.deleteReview(review.id, id, clearNextReviewOnDelete) { reviewToDelete = null }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { reviewToDelete = null }) { Text("取消") } },
+        )
+    }
 }
 
 @Composable
@@ -372,6 +408,7 @@ private fun DecisionStatePage(
     onBack: () -> Unit,
     onReturnHome: () -> Unit = onBack,
     missing: Boolean = false,
+    retry: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -386,18 +423,23 @@ private fun DecisionStatePage(
                 Text(if (missing) "找不到这条决定" else "正在加载", style = MaterialTheme.typography.titleMedium)
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (missing) TextButton(onClick = onReturnHome) { Text("回到今天") }
+                if (!missing && retry != null) TextButton(onClick = retry) { Text("重试") }
             }
         }
     }
 }
 
 @Composable
-private fun ReviewArchiveCard(number: Int, review: Review, previousEventAt: Long, highlight: Boolean) {
+private fun ReviewArchiveCard(number: Int, review: Review, previousEventAt: Long, highlight: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
     SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = if (highlight) MistGreen else MaterialTheme.colorScheme.surface) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("第 $number 次回看", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(formatDate(review.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(formatDate(review.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = onEdit) { Text("更正") }
+                    TextButton(onClick = onDelete) { Text("删除") }
+                }
             }
             Text(reviewIntervalLabel(review.createdAt, previousEventAt, number == 1), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(review.result, style = MaterialTheme.typography.bodyLarge)

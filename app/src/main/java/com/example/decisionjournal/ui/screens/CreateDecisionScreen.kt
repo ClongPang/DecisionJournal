@@ -209,6 +209,22 @@ fun CreateDecisionScreen(
         }
         return
     }
+    if (decisionId != null && editorState is DecisionEditorState.Error) {
+        Column(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+            verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
+        ) {
+            JournalTopBar(title = "编辑决定", onBack = onBack)
+            SoftSurfaceCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("暂时无法读取", style = MaterialTheme.typography.titleMedium)
+                    Text((editorState as DecisionEditorState.Error).message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = vm::retry) { Text("重试") }
+                }
+            }
+        }
+        return
+    }
 
     fun save() {
         val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate, reviewDateCalendarKey)

@@ -163,15 +163,21 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                         entry.savedStateHandle["savedMessage"] = message
                     },
                     onReview = { nav.navigate("review/$id") },
+                    onEditReview = { reviewId -> nav.navigate("review/$id?reviewId=$reviewId") },
                     onEdit = { nav.navigate("create?decisionId=$id") },
                     onBack = ::navigateBackOrHome,
                     onReturnHome = ::navigateHome,
                 )
             }
-            composable("review/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+            composable("review/{id}?reviewId={reviewId}", arguments = listOf(
+                navArgument("id") { type = NavType.LongType },
+                navArgument("reviewId") { type = NavType.LongType; defaultValue = -1L },
+            )) { entry ->
                 val id = entry.arguments?.getLong("id") ?: return@composable
+                val reviewId = entry.arguments?.getLong("reviewId")?.takeIf { it > 0L }
                 ReviewScreen(
                     id,
+                    reviewId = reviewId,
                     onDone = { outcome ->
                         nav.previousBackStackEntry?.savedStateHandle?.set("reminderWarning", outcome.reminderWarning != null)
                         nav.previousBackStackEntry?.savedStateHandle?.set("savedMessage", "复盘已保存")

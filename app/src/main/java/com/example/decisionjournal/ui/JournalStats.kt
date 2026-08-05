@@ -32,6 +32,7 @@ sealed interface DecisionFilter {
     data object Due : DecisionFilter
     data object Upcoming : DecisionFilter
     data object Reviewed : DecisionFilter
+    data object HasReviews : DecisionFilter
     data object Unscheduled : DecisionFilter
     data class Preset(val period: DecisionPeriod) : DecisionFilter
     data class Custom(val range: CustomDateRange) : DecisionFilter
@@ -49,6 +50,7 @@ data class DecisionStatusCounts(
     val upcoming: Int = 0,
     val reviewed: Int = 0,
     val unscheduled: Int = 0,
+    val hasReviews: Int = 0,
 )
 
 const val INITIAL_DECISION_PAGE_SIZE = 10
@@ -98,12 +100,14 @@ fun filterDecisions(
     date: LocalDate,
     zone: ZoneId,
     now: Long = System.currentTimeMillis(),
+    reviewedDecisionIds: Set<Long>? = null,
 ): List<Decision> {
     val range = when (filter) {
         DecisionFilter.All -> null
         DecisionFilter.Due -> null
         DecisionFilter.Upcoming -> null
         DecisionFilter.Reviewed -> null
+        DecisionFilter.HasReviews -> null
         DecisionFilter.Unscheduled -> null
         is DecisionFilter.Preset -> dateTimeRange(filter.period, date, zone)
         is DecisionFilter.Custom -> dateTimeRange(filter.range, zone)
@@ -116,6 +120,7 @@ fun filterDecisions(
                 DecisionFilter.Due -> isReviewDue(it, now) && it.status != DecisionStatus.REVIEWED
                 DecisionFilter.Upcoming -> isReviewUpcoming(it, now) && it.status != DecisionStatus.REVIEWED
                 DecisionFilter.Reviewed -> it.status == DecisionStatus.REVIEWED
+                DecisionFilter.HasReviews -> reviewedDecisionIds?.contains(it.id) == true
                 DecisionFilter.Unscheduled -> it.reviewDate == null && it.status != DecisionStatus.REVIEWED
                 else -> true
             }
