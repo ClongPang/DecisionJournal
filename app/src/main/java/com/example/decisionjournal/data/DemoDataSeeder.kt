@@ -260,7 +260,8 @@ class DemoDataSeeder @Inject constructor(
         val seededDecision = decision.copy(
             status = DecisionStatus.ACTIVE,
             selectedChoiceId = selectedIndex?.toLong(),
-            reminderAt = reviewReminderAt(decision.reviewDate),
+            reviewDateKey = reviewDateKey(decision.reviewDate),
+            reminderAt = reviewReminderAt(decision.reviewDate, reviewDateKey = reviewDateKey(decision.reviewDate)),
         )
         val id = dao.save(seededDecision, choices)
         // Demo data must remain usable when notification permission is denied or blocked.
@@ -284,7 +285,7 @@ class DemoDataSeeder @Inject constructor(
             choices,
         )
         reviews.sortedBy { it.createdAt }.forEach { review ->
-            dao.saveReview(review.copy(decisionId = id), null, null, review.createdAt)
+            dao.saveReview(review.copy(decisionId = id), null, null, null, review.createdAt)
         }
     }
 

@@ -26,6 +26,7 @@ object AppModule {
                 DecisionDatabase.MIGRATION_6_7,
                 DecisionDatabase.MIGRATION_7_8,
                 DecisionDatabase.MIGRATION_8_9,
+                DecisionDatabase.MIGRATION_9_10,
             )
             .build()
 

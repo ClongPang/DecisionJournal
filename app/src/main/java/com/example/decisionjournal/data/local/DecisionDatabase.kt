@@ -8,8 +8,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.Review
+import java.time.Instant
+import java.time.ZoneId
 
-@Database(entities = [Decision::class, Choice::class, Review::class], version = 9, exportSchema = true)
+@Database(entities = [Decision::class, Choice::class, Review::class], version = 10, exportSchema = true)
 @TypeConverters(DecisionConverters::class)
 abstract class DecisionDatabase : RoomDatabase() {
     abstract fun decisionDao(): DecisionDao
@@ -66,6 +68,21 @@ abstract class DecisionDatabase : RoomDatabase() {
                 // Existing reviewDate values are calendar days. The repository rebuilds their
                 // notification work at the evening reminder time on the next app start.
                 db.execSQL("ALTER TABLE decisions ADD COLUMN reminderAt INTEGER")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE decisions ADD COLUMN reviewDateKey TEXT")
+                val zone = ZoneId.systemDefault()
+                db.query("SELECT id, reviewDate FROM decisions WHERE reviewDate IS NOT NULL").use { cursor ->
+                    val idIndex = cursor.getColumnIndexOrThrow("id")
+                    val dateIndex = cursor.getColumnIndexOrThrow("reviewDate")
+                    while (cursor.moveToNext()) {
+                        val key = Instant.ofEpochMilli(cursor.getLong(dateIndex)).atZone(zone).toLocalDate().toString()
+                        db.execSQL("UPDATE decisions SET reviewDateKey = ? WHERE id = ?", arrayOf<Any>(key, cursor.getLong(idIndex)))
+                    }
+                }
             }
         }
     }

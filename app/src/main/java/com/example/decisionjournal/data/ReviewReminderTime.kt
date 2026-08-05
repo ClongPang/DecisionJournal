@@ -1,6 +1,7 @@
 package com.example.decisionjournal.data
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
@@ -15,8 +16,11 @@ internal fun reviewReminderAt(
     reviewDate: Long?,
     now: Long = System.currentTimeMillis(),
     zone: ZoneId = ZoneId.systemDefault(),
+    reviewDateKey: String? = null,
 ): Long? {
-    val reviewDay = reviewDate?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() } ?: return null
+    val reviewDay = reviewDateKey?.let(LocalDate::parse)
+        ?: reviewDate?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+        ?: return null
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     // Selecting today means “show it in my review list now”, not “surprise me later today”.
     if (!reviewDay.isAfter(today)) return null

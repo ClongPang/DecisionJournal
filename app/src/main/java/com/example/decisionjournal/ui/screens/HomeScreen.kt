@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CalendarToday
@@ -54,9 +56,11 @@ fun HomeScreen(
 ) {
     val listState by vm.listState.collectAsStateWithLifecycle()
     val due by vm.due.collectAsStateWithLifecycle()
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = JournalDimens.pageHorizontal, vertical = JournalDimens.pageVertical),
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = JournalDimens.pageHorizontal, end = JournalDimens.pageHorizontal, top = JournalDimens.pageVertical, bottom = JournalDimens.buttonHeight + 40.dp),
         verticalArrangement = Arrangement.spacedBy(JournalDimens.cardSpacing),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -86,16 +90,31 @@ fun HomeScreen(
                 featured?.let { decision ->
                     ArchiveCoverCard(decision, featuredStatus, onOpen)
                     if (due.size > 1) {
+                        Text("接下来还要回看（还有 ${due.size - 1} 条）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = onViewDue, modifier = Modifier.align(Alignment.End)) {
                             Text("查看全部 ${due.size} 条待回看")
+                        }
+                        due.drop(1).take(1).forEach { queued ->
+                            Text(
+                                "下一条：${queued.question}",
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.weight(1f))
-        PrimaryActionButton("记录一个决定", onCreate)
+        Spacer(Modifier.height(24.dp))
+    }
+    PrimaryActionButton(
+        "记录一个决定",
+        onCreate,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = JournalDimens.pageHorizontal, vertical = 10.dp),
+    )
     }
 }
 

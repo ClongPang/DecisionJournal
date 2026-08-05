@@ -9,6 +9,7 @@ import com.example.decisionjournal.data.model.ReminderState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
@@ -27,6 +28,7 @@ data class DecisionInput(
     val expectedOutcome: String? = null,
     val confidence: Int? = null,
     val decisionDate: Long = System.currentTimeMillis(),
+    val reviewDateKey: String? = null,
 )
 data class ReviewInput(
     val decisionId: Long,
@@ -37,6 +39,7 @@ data class ReviewInput(
     val accurateJudgment: String? = null,
     val unexpectedFinding: String? = null,
     val nextTimeNote: String? = null,
+    val nextReviewDateKey: String? = null,
 )
 data class DecisionEditorData(val decision: Decision, val choices: List<Choice>)
 data class DecisionSearchFields(val decisionId: Long, val terms: List<String>)
@@ -74,9 +77,15 @@ class DecisionRepository @Inject constructor(
         }
         termsByDecision.map { (decisionId, terms) -> DecisionSearchFields(decisionId, terms) }
     }
-    fun due(now: Long = System.currentTimeMillis()) = dao.observeDue(now)
+    fun due(now: Long = System.currentTimeMillis()) = decisions.map { items ->
+        items.filter { isReviewDue(it, now) && it.status != com.example.decisionjournal.data.model.DecisionStatus.REVIEWED }
+            .sortedWith(compareBy<Decision> { localReviewDate(it) }.thenByDescending { it.decisionDate })
+    }
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun due(clock: Flow<Long>): Flow<List<Decision>> = clock.flatMapLatest { dao.observeDue(it) }
+    fun due(clock: Flow<Long>): Flow<List<Decision>> = combine(decisions, clock) { items, now ->
+        items.filter { isReviewDue(it, now) && it.status != com.example.decisionjournal.data.model.DecisionStatus.REVIEWED }
+            .sortedWith(compareBy<Decision> { localReviewDate(it) }.thenByDescending { it.decisionDate })
+    }
     fun observe(id: Long): Flow<Decision?> = dao.observeById(id)
     fun editor(id: Long): Flow<DecisionEditorData?> = combine(dao.observeById(id), dao.observeChoices(id)) { decision, choices ->
         decision?.let { DecisionEditorData(it, choices) }
@@ -94,7 +103,8 @@ class DecisionRepository @Inject constructor(
             "复盘日期不能早于今天"
         }
         val now = System.currentTimeMillis()
-        val reminderAt = reviewReminderAt(input.reviewDate, now)
+        val normalizedReviewDateKey = input.reviewDateKey ?: reviewDateKey(input.reviewDate)
+        val reminderAt = reviewReminderAt(input.reviewDate, now, reviewDateKey = normalizedReviewDateKey)
         val decision = Decision(
             id = input.id,
             question = input.question.trim(),
@@ -109,7 +119,8 @@ class DecisionRepository @Inject constructor(
             decisionDate = input.decisionDate,
             reviewDate = input.reviewDate,
             reminderAt = reminderAt,
-            status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate),
+            reviewDateKey = normalizedReviewDateKey,
+            status = DecisionStatusRules.afterDecisionSave(previous?.status, previous?.reviewDate, input.reviewDate, previous?.reviewDateKey, normalizedReviewDateKey),
             selectedChoiceId = selectedChoiceIndex?.toLong(),
         )
         val id = dao.save(decision, cleanChoices.map { Choice(decisionId = 0L, text = it.text, benefits = it.benefits, concerns = it.concerns) })
@@ -121,7 +132,8 @@ class DecisionRepository @Inject constructor(
         val validationError = ReviewValidation.validate(input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
         require(dao.getById(input.decisionId) != null) { "这条决定不存在或已被删除" }
-        val reminderAt = reviewReminderAt(input.nextReviewDate)
+        val normalizedNextReviewDateKey = input.nextReviewDateKey ?: reviewDateKey(input.nextReviewDate)
+        val reminderAt = reviewReminderAt(input.nextReviewDate, reviewDateKey = normalizedNextReviewDateKey)
         val id = dao.saveReview(
             Review(
                 decisionId = input.decisionId,
@@ -134,6 +146,7 @@ class DecisionRepository @Inject constructor(
             ),
             input.nextReviewDate,
             reminderAt,
+            normalizedNextReviewDateKey,
             System.currentTimeMillis(),
         )
         val reminderState = updateReminderState(input.decisionId, input.nextReviewDate, reminderAt)
@@ -143,7 +156,7 @@ class DecisionRepository @Inject constructor(
 
     suspend fun retryReminder(decisionId: Long): Result<Unit> = capture {
         val decision = dao.getById(decisionId) ?: error("这条决定不存在或已被删除")
-        require(decision.reviewDate != null && decision.reviewDate > System.currentTimeMillis()) {
+        require(isReviewUpcoming(decision, System.currentTimeMillis())) {
             "回看日期已过，无法再安排提醒"
         }
         val state = updateReminderState(decisionId, decision.reviewDate, decision.reminderAt)
@@ -154,9 +167,10 @@ class DecisionRepository @Inject constructor(
         capture {
             val decision = dao.getById(decisionId) ?: return@capture false
             val reviewDate = decision.reviewDate ?: return@capture false
-            val expectedReminderAt = reviewReminderAt(reviewDate) ?: return@capture false
+            val expectedKey = decision.reviewDateKey ?: reviewDateKey(reviewDate)
+            val expectedReminderAt = reviewReminderAt(reviewDate, reviewDateKey = expectedKey) ?: return@capture false
             if (decision.reminderAt != expectedReminderAt) {
-                check(dao.updateReminderAt(decisionId, expectedReminderAt) == 1) { "更新提醒时间失败" }
+                check(dao.updateReminderAt(decisionId, expectedReminderAt, expectedKey) == 1) { "更新提醒时间失败" }
                 val state = updateReminderState(decisionId, reviewDate, expectedReminderAt)
                 return@capture state == ReminderState.SCHEDULED
             }
@@ -170,9 +184,10 @@ class DecisionRepository @Inject constructor(
     /** Rebuilds pre-v9 midnight work using the current evening reminder policy after upgrade. */
     suspend fun reconcileReminders() {
         dao.getAll().forEach { decision ->
-            val expectedReminderAt = reviewReminderAt(decision.reviewDate) ?: return@forEach
-            if (decision.reminderAt != expectedReminderAt) {
-                check(dao.updateReminderAt(decision.id, expectedReminderAt) == 1) { "更新提醒时间失败" }
+            val expectedKey = decision.reviewDateKey ?: reviewDateKey(decision.reviewDate)
+            val expectedReminderAt = reviewReminderAt(decision.reviewDate, reviewDateKey = expectedKey) ?: return@forEach
+            if (decision.reminderAt != expectedReminderAt || decision.reviewDateKey != expectedKey) {
+                check(dao.updateReminderAt(decision.id, expectedReminderAt, expectedKey) == 1) { "更新提醒时间失败" }
                 updateReminderState(decision.id, decision.reviewDate, expectedReminderAt)
             }
         }

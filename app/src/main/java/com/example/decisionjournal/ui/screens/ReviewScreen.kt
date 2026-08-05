@@ -86,6 +86,7 @@ fun ReviewScreen(
     var result by rememberSaveable { mutableStateOf("") }
     var satisfaction by rememberSaveable { mutableStateOf("") }
     var nextReviewDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    var nextReviewDateCalendarKey by rememberSaveable { mutableStateOf<String?>(null) }
     var expectationMatch by rememberSaveable(stateSaver = expectationMatchSaver) { mutableStateOf<ExpectationMatch?>(null) }
     var accurateJudgment by rememberSaveable { mutableStateOf("") }
     var unexpectedFinding by rememberSaveable { mutableStateOf("") }
@@ -114,8 +115,9 @@ fun ReviewScreen(
         DatePickerDialog(
             context,
             { _, year, month, day ->
-                nextReviewDate = LocalDate.of(year, month + 1, day)
-                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val selectedDate = LocalDate.of(year, month + 1, day)
+                nextReviewDate = selectedDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                nextReviewDateCalendarKey = selectedDate.toString()
             },
             date.year,
             date.monthValue - 1,
@@ -126,10 +128,10 @@ fun ReviewScreen(
         if (hasUnsavedChanges && vm.saveState != SaveState.Saving) confirmExit = true else onBack()
     }
     fun saveReview() {
-        val input = ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote)
+        val input = ReviewInput(decisionId, result, satisfaction.toIntOrNull(), nextReviewDate, expectationMatch, accurateJudgment, unexpectedFinding, nextTimeNote, nextReviewDateCalendarKey)
         val needsPermission = Build.VERSION.SDK_INT >= 33 &&
             nextReviewDate != null &&
-            nextReviewDate!! > System.currentTimeMillis() &&
+            (nextReviewDateCalendarKey?.let { LocalDate.parse(it).isAfter(LocalDate.now()) } ?: (nextReviewDate!! > System.currentTimeMillis())) &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             pendingInput = input
@@ -270,7 +272,7 @@ fun ReviewScreen(
                     TextButton(
                         onClick = { hasUnsavedChanges = true; showDatePicker() },
                         modifier = Modifier.semantics {
-                            contentDescription = nextReviewDate?.let { "修改下一次复盘日期：${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(reviewDateFormatter)}" }
+                            contentDescription = nextReviewDate?.let { "修改下一次复盘日期：${(nextReviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(reviewDateFormatter)}" }
                                 ?: "设置下一次复盘日期"
                         },
                     ) {
@@ -278,12 +280,12 @@ fun ReviewScreen(
                     }
                     nextReviewDate?.let {
                         Text(
-                            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(reviewDateFormatter),
+                            (nextReviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(reviewDateFormatter),
                             modifier = Modifier.padding(start = 12.dp),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         TextButton(
-                            onClick = { hasUnsavedChanges = true; nextReviewDate = null },
+                            onClick = { hasUnsavedChanges = true; nextReviewDate = null; nextReviewDateCalendarKey = null },
                             modifier = Modifier.semantics { contentDescription = "清除下一次复盘日期，不再安排提醒" },
                         ) { Text("不再提醒") }
                     }
@@ -291,7 +293,10 @@ fun ReviewScreen(
             }
         }
         Text(
-            if (nextReviewDate?.let { it <= System.currentTimeMillis() } == true) {
+            if (nextReviewDate?.let {
+                    nextReviewDateCalendarKey?.let { key -> !LocalDate.parse(key).isAfter(LocalDate.now()) }
+                        ?: (it <= System.currentTimeMillis())
+                } == true) {
                 "今天继续回看会在保存后立即显示为待回看，不会发送系统通知。"
             } else {
                 "不设置日期也可以保存；设置未来日期后会在当天${reminderTimeLabel()}提醒你，实际到达可能略有延迟。"

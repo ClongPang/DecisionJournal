@@ -47,8 +47,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.decisionjournal.data.model.ExpectationMatch
 import com.example.decisionjournal.data.model.Review
 import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.REVIEW_REMINDER_CHANNEL_ID
 import com.example.decisionjournal.data.reminderTimeLabel
+import com.example.decisionjournal.data.isReviewDue
+import com.example.decisionjournal.data.isReviewUpcoming
+import com.example.decisionjournal.data.localReviewDate
 import com.example.decisionjournal.data.model.ReminderState
 import com.example.decisionjournal.ui.DetailViewModel
 import com.example.decisionjournal.ui.DecisionLoadState
@@ -177,7 +181,7 @@ fun DecisionDetailScreen(
                 containerColor = MistGreen,
             ) {
                 Text(
-                    "复盘提醒已恢复，将在 ${formatDate(decision.reviewDate ?: System.currentTimeMillis())}${reminderTimeLabel()}提醒你。",
+                    "复盘提醒已恢复，将在 ${formatDate(decision)}${reminderTimeLabel()}提醒你。",
                     modifier = Modifier.padding(16.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -205,7 +209,7 @@ fun DecisionDetailScreen(
                         onClick = {
                             vm.retryReminder(id) {
                                 showReminderWarning = false
-                                val whenText = decision.reviewDate?.let { "，将在 ${formatDate(it)}${reminderTimeLabel()}提醒你" }.orEmpty()
+                                val whenText = decision.reviewDate?.let { "，将在 ${formatDate(decision)}${reminderTimeLabel()}提醒你" }.orEmpty()
                                 onReminderRestored("复盘提醒已恢复$whenText")
                             }
                         },
@@ -226,11 +230,11 @@ fun DecisionDetailScreen(
 
         decision.let { d ->
             val reviewed = d.status == DecisionStatus.REVIEWED
-            val due = !reviewed && d.reviewDate != null && d.reviewDate <= now
+            val due = !reviewed && isReviewDue(d, now)
             val statusText = when {
                 reviewed -> "已回看"
                 due -> "待复盘"
-                d.reviewDate != null -> "等待回看"
+                isReviewUpcoming(d, now) -> "等待回看"
                 else -> "尚未设置日期"
             }
             SoftSurfaceCard(
@@ -249,9 +253,9 @@ fun DecisionDetailScreen(
                     }
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("决定于 ${formatDate(d.decisionDate)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        d.reviewDate?.let { reviewDate ->
-                            Text("回看日：${formatDate(reviewDate)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (!reviewed && reviewDate > now) {
+                        d.reviewDate?.let {
+                            Text("回看日：${formatDate(d)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (!reviewed && isReviewUpcoming(d, now)) {
                                 Text(
                                     "预设提醒：回看日${reminderTimeLabel()}；系统可能略有延迟",
                                     style = MaterialTheme.typography.bodySmall,
@@ -478,6 +482,9 @@ private fun ReflectionPanel(title: String, content: String, color: androidx.comp
 
 private fun formatDate(timestamp: Long): String =
     Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().format(detailDateFormatter)
+
+private fun formatDate(decision: Decision): String =
+    localReviewDate(decision)?.format(detailDateFormatter) ?: formatDate(decision.reviewDate ?: decision.decisionDate)
 
 internal fun reviewIntervalLabel(reviewedAt: Long, previousEventAt: Long, isFirstReview: Boolean): String {
     val days = ((reviewedAt - previousEventAt) / 86_400_000L).coerceAtLeast(0)

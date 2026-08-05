@@ -3,6 +3,8 @@ package com.example.decisionjournal.ui
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.data.DecisionSearchFields
+import com.example.decisionjournal.data.isReviewDue
+import com.example.decisionjournal.data.isReviewUpcoming
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -84,8 +86,8 @@ fun calculatePeriodCounts(decisions: List<Decision>, date: LocalDate, zone: Zone
 
 fun calculateDecisionStatusCounts(decisions: List<Decision>, now: Long): DecisionStatusCounts =
     DecisionStatusCounts(
-        due = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED },
-        upcoming = decisions.count { it.reviewDate != null && it.reviewDate > now && it.status != DecisionStatus.REVIEWED },
+        due = decisions.count { isReviewDue(it, now) && it.status != DecisionStatus.REVIEWED },
+        upcoming = decisions.count { isReviewUpcoming(it, now) && it.status != DecisionStatus.REVIEWED },
         reviewed = decisions.count { it.status == DecisionStatus.REVIEWED },
         unscheduled = decisions.count { it.reviewDate == null && it.status != DecisionStatus.REVIEWED },
     )
@@ -111,8 +113,8 @@ fun filterDecisions(
         .filter { range == null || it.decisionDate in range.startInclusive until range.endExclusive }
         .filter {
             when (filter) {
-                DecisionFilter.Due -> it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED
-                DecisionFilter.Upcoming -> it.reviewDate != null && it.reviewDate > now && it.status != DecisionStatus.REVIEWED
+                DecisionFilter.Due -> isReviewDue(it, now) && it.status != DecisionStatus.REVIEWED
+                DecisionFilter.Upcoming -> isReviewUpcoming(it, now) && it.status != DecisionStatus.REVIEWED
                 DecisionFilter.Reviewed -> it.status == DecisionStatus.REVIEWED
                 DecisionFilter.Unscheduled -> it.reviewDate == null && it.status != DecisionStatus.REVIEWED
                 else -> true
@@ -144,6 +146,24 @@ fun searchDecisions(
     }
 }
 
+/** Returns a short, user-facing reason for a search hit without exposing storage details. */
+fun searchMatchSource(
+    decision: Decision,
+    query: String,
+    searchFields: List<DecisionSearchFields> = emptyList(),
+): String? {
+    val keyword = query.trim()
+    if (keyword.isEmpty()) return null
+    fun contains(values: List<String?>): Boolean = values.filterNotNull().any { it.contains(keyword, ignoreCase = true) }
+    return when {
+        contains(listOf(decision.question)) -> "问题"
+        contains(listOf(decision.context, decision.futureNote, decision.expectedOutcome)) -> "背景或写给未来"
+        contains(decision.benefits + decision.concerns) -> "在意或担心"
+        contains(searchFields.firstOrNull { it.decisionId == decision.id }?.terms.orEmpty()) -> "候选项或复盘内容"
+        else -> null
+    }
+}
+
 private fun countCreatedInRange(decisions: List<Decision>, range: DateTimeRange): Int =
     decisions.count { it.decisionDate in range.startInclusive until range.endExclusive }
 
@@ -162,7 +182,7 @@ fun calculateDecisionStats(decisions: List<Decision>, now: Long): DecisionStats 
 
     return DecisionStats(
         completedCount = decisions.count { it.status == DecisionStatus.REVIEWED },
-        dueCount = decisions.count { it.reviewDate != null && it.reviewDate <= now && it.status != DecisionStatus.REVIEWED },
+        dueCount = decisions.count { isReviewDue(it, now) && it.status != DecisionStatus.REVIEWED },
         mostCaredAbout = caredAbout?.key,
         mostCaredAboutEvidenceCount = caredAbout?.value ?: 0,
     )

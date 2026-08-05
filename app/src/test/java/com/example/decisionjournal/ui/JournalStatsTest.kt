@@ -134,6 +134,8 @@ class JournalStatsTest {
 
         assertEquals(listOf("是否搬家"), searchDecisions(decisions, "通勤", fields).map { it.question })
         assertEquals(listOf("学习计划"), searchDecisions(decisions, "缩小目标", fields).map { it.question })
+        assertEquals("候选项或复盘内容", searchMatchSource(decisions[1], "缩小目标", fields))
+        assertEquals("问题", searchMatchSource(decisions[0], "搬家"))
     }
     @Test
     fun calculatesCompletedDueAndMostCaredAbout() {

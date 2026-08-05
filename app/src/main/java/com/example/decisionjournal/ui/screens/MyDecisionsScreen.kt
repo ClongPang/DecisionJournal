@@ -43,6 +43,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
 import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.isReviewDue
+import com.example.decisionjournal.data.isReviewUpcoming
 import com.example.decisionjournal.ui.DecisionsViewModel
 import com.example.decisionjournal.ui.DecisionListState
 import com.example.decisionjournal.ui.CustomDateRange
@@ -54,6 +56,7 @@ import com.example.decisionjournal.ui.PeriodCounts
 import com.example.decisionjournal.ui.calculateSelfInsights
 import com.example.decisionjournal.ui.nextDecisionPageSize
 import com.example.decisionjournal.ui.searchDecisions
+import com.example.decisionjournal.ui.searchMatchSource
 import com.example.decisionjournal.ui.components.EmptyJournalState
 import com.example.decisionjournal.ui.components.ArchiveKicker
 import com.example.decisionjournal.ui.components.JournalTopBar
@@ -289,6 +292,7 @@ fun MyDecisionsScreen(
                     now = now,
                     isFirst = index == 0,
                     isLast = index == timelineDecisions.lastIndex,
+                    searchMatchSource = searchMatchSource(decision, searchQuery, searchFields),
                     onOpen = onOpen,
                 )
             }
@@ -485,14 +489,15 @@ private fun TimelineItem(
     now: Long,
     isFirst: Boolean,
     isLast: Boolean,
+    searchMatchSource: String? = null,
     onOpen: (Long) -> Unit,
 ) {
-    val due = decision.reviewDate != null && decision.reviewDate <= now && decision.status != DecisionStatus.REVIEWED
+    val due = isReviewDue(decision, now) && decision.status != DecisionStatus.REVIEWED
     val reviewed = decision.status == DecisionStatus.REVIEWED
     val statusText = when {
         due -> "待复盘"
         reviewed -> "已回看"
-        decision.reviewDate != null -> "等待回看"
+        isReviewUpcoming(decision, now) -> "等待回看"
         else -> "尚未设置日期"
     }
     val nodeColor = if (due) MaterialTheme.colorScheme.primary else if (reviewed) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline
@@ -515,6 +520,9 @@ private fun TimelineItem(
                     Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.height(14.dp))
                 }
                 Text(decision.question, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                searchMatchSource?.let {
+                    Text("命中：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
                 StatusPill(statusText, if (due) MistBlue else if (reviewed) MistGreen else MaterialTheme.colorScheme.surfaceVariant)
             }
         }

@@ -54,9 +54,17 @@ object ReviewValidation {
 }
 
 object DecisionStatusRules {
-    fun afterDecisionSave(previous: DecisionStatus?, previousReviewDate: Long?, newReviewDate: Long?): DecisionStatus {
+    fun afterDecisionSave(
+        previous: DecisionStatus?,
+        previousReviewDate: Long?,
+        newReviewDate: Long?,
+        previousReviewDateKey: String? = null,
+        newReviewDateKey: String? = null,
+    ): DecisionStatus {
         if (previous == null) return DecisionStatus.ACTIVE
-        if (previous == DecisionStatus.REVIEWED && previousReviewDate != newReviewDate) return DecisionStatus.ACTIVE
+        if (previous == DecisionStatus.REVIEWED &&
+            if (previousReviewDateKey != null || newReviewDateKey != null) previousReviewDateKey != newReviewDateKey else previousReviewDate != newReviewDate
+        ) return DecisionStatus.ACTIVE
         return previous
     }
 

@@ -57,6 +57,7 @@ import com.example.decisionjournal.data.ChoiceInput
 import com.example.decisionjournal.data.DecisionInput
 import com.example.decisionjournal.data.SaveOutcome
 import com.example.decisionjournal.data.reminderTimeLabel
+import com.example.decisionjournal.data.reviewDateKey
 import com.example.decisionjournal.ui.CreateDecisionViewModel
 import com.example.decisionjournal.ui.DecisionEditorState
 import com.example.decisionjournal.ui.SaveState
@@ -138,6 +139,7 @@ fun CreateDecisionScreen(
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     var decisionDate by rememberSaveable { mutableStateOf(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()) }
     var reviewDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    var reviewDateCalendarKey by rememberSaveable { mutableStateOf<String?>(null) }
     var initialized by rememberSaveable { mutableStateOf(false) }
     var pendingInput by remember { mutableStateOf<DecisionInput?>(null) }
     var hasUnsavedChanges by rememberSaveable { mutableStateOf(false) }
@@ -165,6 +167,7 @@ fun CreateDecisionScreen(
             selected = loadedChoices.indexOfFirst { it.id == decision.selectedChoiceId }.takeIf { it >= 0 }
             decisionDate = decision.decisionDate
             reviewDate = decision.reviewDate
+            reviewDateCalendarKey = decision.reviewDateKey ?: reviewDateKey(decision.reviewDate)
             initialized = true
         }
     }
@@ -208,10 +211,13 @@ fun CreateDecisionScreen(
     }
 
     fun save() {
-        val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate)
+        val input = DecisionInput(decisionId ?: 0L, question, contextText, reviewDate, selected, choices, lines(benefitsText), lines(concernsText), futureNote, expectedOutcome, confidence.toIntOrNull(), decisionDate, reviewDateCalendarKey)
         if (!vm.validateBeforePermissionRequest(input)) return
         val selectedReviewDate = reviewDate
-        val needsPermission = Build.VERSION.SDK_INT >= 33 && selectedReviewDate != null && selectedReviewDate > System.currentTimeMillis() && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        val needsPermission = Build.VERSION.SDK_INT >= 33 &&
+            selectedReviewDate != null &&
+            (reviewDateCalendarKey?.let { LocalDate.parse(it).isAfter(LocalDate.now()) } ?: (selectedReviewDate > System.currentTimeMillis())) &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsPermission) {
             pendingInput = input
             showNotificationRationale = true
@@ -287,8 +293,14 @@ fun CreateDecisionScreen(
         hasUnsavedChanges = true
     }
     fun showDatePicker() {
-        val date = reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() } ?: LocalDate.now().plusDays(7)
-        DatePickerDialog(context, { _, year, month, day -> reviewDate = LocalDate.of(year, month + 1, day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }, date.year, date.monthValue - 1, date.dayOfMonth).apply { datePicker.minDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.show()
+        val date = reviewDateCalendarKey?.let(LocalDate::parse)
+            ?: reviewDate?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
+            ?: LocalDate.now().plusDays(7)
+        DatePickerDialog(context, { _, year, month, day ->
+            val selectedDate = LocalDate.of(year, month + 1, day)
+            reviewDate = selectedDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            reviewDateCalendarKey = selectedDate.toString()
+        }, date.year, date.monthValue - 1, date.dayOfMonth).apply { datePicker.minDate = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.show()
     }
     fun showDecisionDatePicker() {
         val date = Instant.ofEpochMilli(decisionDate).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -431,16 +443,16 @@ fun CreateDecisionScreen(
                             TextButton(
                                 onClick = { hasUnsavedChanges = true; showDatePicker() },
                                 modifier = Modifier.semantics {
-                                    contentDescription = reviewDate?.let { "修改未来回看日期：${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)}" }
+                                    contentDescription = reviewDate?.let { "修改未来回看日期：${(reviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(createDate)}" }
                                         ?: "设置未来回看日期"
                                 },
                             ) { Text(if (reviewDate == null) "设置日期" else "修改日期") }
                         }
                         reviewDate?.let {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate), style = MaterialTheme.typography.bodyMedium)
+                                Text((reviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(createDate), style = MaterialTheme.typography.bodyMedium)
                                 TextButton(
-                                    { hasUnsavedChanges = true; reviewDate = null },
+                                    { hasUnsavedChanges = true; reviewDate = null; reviewDateCalendarKey = null },
                                     modifier = Modifier.semantics { contentDescription = "清除未来回看日期" },
                                 ) { Text("清除") }
                             }
@@ -448,7 +460,10 @@ fun CreateDecisionScreen(
                     }
                 }
                 Text(
-                    if (reviewDate?.let { it <= System.currentTimeMillis() } == true) {
+                    if (reviewDate?.let {
+                            reviewDateCalendarKey?.let { key -> !LocalDate.parse(key).isAfter(LocalDate.now()) }
+                                ?: (it <= System.currentTimeMillis())
+                        } == true) {
                         "今天回看会在保存后立即显示为待回看，不会发送系统通知。"
                     } else {
                         "系统会在所选日期${reminderTimeLabel()}提醒你，实际到达可能略有延迟。拒绝权限也不影响保存。"
@@ -466,7 +481,7 @@ fun CreateDecisionScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            reviewDate?.let { "计划于 ${Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(createDate)} 回看 · ${reminderTimeLabel()}提醒" } ?: "尚未设置回看日期",
+                            reviewDate?.let { "计划于 ${(reviewDateCalendarKey?.let(LocalDate::parse) ?: Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()).format(createDate)} 回看 · ${reminderTimeLabel()}提醒" } ?: "尚未设置回看日期",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

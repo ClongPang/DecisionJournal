@@ -47,4 +47,24 @@ class ReviewReminderSchedulerTest {
         val expected = today.plusDays(1).atTime(20, 0).atZone(zone).toInstant().toEpochMilli()
         assertEquals(expected, reviewReminderAt(tomorrowStart, now, zone))
     }
+
+    @Test
+    fun calendarDateKeyStaysStableAcrossTimezonesWhileReminderFollowsLocalTime() {
+        val key = "2026-08-20"
+        val shanghai = ZoneId.of("Asia/Shanghai")
+        val losAngeles = ZoneId.of("America/Los_Angeles")
+        val kiritimati = ZoneId.of("Pacific/Kiritimati")
+        val legacyInstant = LocalDate.of(2026, 8, 20).atStartOfDay(shanghai).toInstant().toEpochMilli()
+        val decision = Decision(id = 7, question = "跨时区", reviewDate = legacyInstant, reviewDateKey = key)
+        val beforeDate = LocalDate.of(2026, 8, 18).atTime(12, 0).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+
+        assertEquals(LocalDate.of(2026, 8, 20), localReviewDate(decision, losAngeles))
+        assertEquals(LocalDate.of(2026, 8, 20), localReviewDate(decision, kiritimati))
+        assertEquals(false, isReviewDue(decision, beforeDate, losAngeles))
+        assertEquals(false, isReviewDue(decision, beforeDate, kiritimati))
+        assertEquals(
+            LocalDate.of(2026, 8, 20).atTime(20, 0).atZone(losAngeles).toInstant().toEpochMilli(),
+            reviewReminderAt(legacyInstant, beforeDate, losAngeles, key),
+        )
+    }
 }
