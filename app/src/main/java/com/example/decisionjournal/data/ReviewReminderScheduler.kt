@@ -65,8 +65,15 @@ interface ReminderWorkerDependencies {
     fun decisionDao(): DecisionDao
 }
 
-class ReviewReminderScheduler @Inject constructor(@ApplicationContext private val context: Context) {
-    fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState {
+/** Scheduler seam for the repository so reminder behavior stays testable without WorkManager. */
+interface ReminderScheduler {
+    fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState
+    fun notificationAvailability(): ReminderState?
+    fun cancel(decisionId: Long)
+}
+
+class ReviewReminderScheduler @Inject constructor(@ApplicationContext private val context: Context) : ReminderScheduler {
+    override fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState {
         require(decisionId > 0L) { "决定 ID 无效" }
         val workManager = WorkManager.getInstance(context)
         val name = WORK_PREFIX + decisionId
@@ -89,9 +96,9 @@ class ReviewReminderScheduler @Inject constructor(@ApplicationContext private va
     }
 
     /** Returns the reason a future reminder cannot be delivered, or null when it is usable. */
-    fun notificationAvailability(): ReminderState? = notificationAvailability(context)
+    override fun notificationAvailability(): ReminderState? = notificationAvailability(context)
 
-    fun cancel(decisionId: Long) {
+    override fun cancel(decisionId: Long) {
         try {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_PREFIX + decisionId)
         } finally {
@@ -134,20 +141,22 @@ class ReviewReminderWorker(context: Context, params: WorkerParameters) : Corouti
                 applicationContext,
                 ReminderWorkerDependencies::class.java,
             ).decisionDao()
+            val decision = dao.getById(decisionId)
             // Cancellation is asynchronous; verify both the source record and the exact date
             // immediately before posting. This rejects an already-running stale request.
-            if (isStopped || !isCurrentReviewReminder(dao.getById(decisionId), scheduledReviewDate, scheduledReminderAt)) {
+            if (isStopped || !isCurrentReviewReminder(decision, scheduledReviewDate, scheduledReminderAt)) {
                 return Result.success()
             }
             notificationAvailability(applicationContext)?.let { unavailable ->
                 dao.updateReminderState(decisionId, unavailable)
                 return Result.success()
             }
+            val question = decision?.question?.trim().orEmpty()
             val notifications = NotificationManagerCompat.from(applicationContext)
             val notification = NotificationCompat.Builder(applicationContext, REVIEW_REMINDER_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("回看提醒")
-                .setContentText("有一个决定到了复盘时间")
+                .setContentText(if (question.isNotEmpty()) "「${question.take(30)}」到了复盘时间" else "有一个决定到了复盘时间")
                 .setContentIntent(
                     PendingIntent.getActivity(
                         applicationContext,

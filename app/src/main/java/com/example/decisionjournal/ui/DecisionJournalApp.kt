@@ -25,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import android.net.Uri
 import androidx.navigation.NavType
@@ -74,7 +77,10 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     launchSingleTop = true
                     restoreState = true
                 }
-            }, { ArchiveNavigationIcon(Icons.Rounded.Home, route == "home") }, label = { Text("今天") }, colors = navColors)
+            }, { ArchiveNavigationIcon(Icons.Rounded.Home, route == "home") }, label = { Text("今天") }, colors = navColors, modifier = Modifier.semantics {
+                contentDescription = "今天"
+                selected = route == "home"
+            })
             NavigationBarItem(isDecisionsRoute, {
                 nav.navigate("decisions?filter=all") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
@@ -82,14 +88,20 @@ fun DecisionJournalApp(initialDecisionId: Long? = null) {
                     // The bottom tab means “all decisions”, not “resume the last archive
                     // filter”. Restoring a saved Due entry here ignored filter=all.
                 }
-            }, { ArchiveNavigationIcon(Icons.Rounded.CalendarToday, isDecisionsRoute) }, label = { Text("决定") }, colors = navColors)
+            }, { ArchiveNavigationIcon(Icons.Rounded.CalendarToday, isDecisionsRoute) }, label = { Text("决定") }, colors = navColors, modifier = Modifier.semantics {
+                contentDescription = "决定"
+                selected = isDecisionsRoute
+            })
             NavigationBarItem(route == "mine", {
                 nav.navigate("mine") {
                     popUpTo(nav.graph.startDestinationId) { saveState = true }
                     launchSingleTop = true
                     restoreState = true
                 }
-            }, { ArchiveNavigationIcon(Icons.Rounded.PersonOutline, route == "mine") }, label = { Text("我的") }, colors = navColors)
+            }, { ArchiveNavigationIcon(Icons.Rounded.PersonOutline, route == "mine") }, label = { Text("我的") }, colors = navColors, modifier = Modifier.semantics {
+                contentDescription = "我的"
+                selected = route == "mine"
+            })
         }
     }) { padding ->
         NavHost(

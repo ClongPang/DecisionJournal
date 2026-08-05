@@ -2,6 +2,8 @@ package com.example.decisionjournal.di
 
 import android.content.Context
 import androidx.room.Room
+import com.example.decisionjournal.data.ReminderScheduler
+import com.example.decisionjournal.data.ReviewReminderScheduler
 import com.example.decisionjournal.data.local.DecisionDao
 import com.example.decisionjournal.data.local.DecisionDatabase
 import dagger.Module
@@ -32,4 +34,7 @@ object AppModule {
 
     @Provides
     fun provideDecisionDao(database: DecisionDatabase): DecisionDao = database.decisionDao()
+
+    @Provides
+    fun provideReminderScheduler(scheduler: ReviewReminderScheduler): ReminderScheduler = scheduler
 }

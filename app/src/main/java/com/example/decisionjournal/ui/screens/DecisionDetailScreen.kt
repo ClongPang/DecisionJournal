@@ -57,6 +57,8 @@ import com.example.decisionjournal.data.localReviewDate
 import com.example.decisionjournal.data.model.ReminderState
 import com.example.decisionjournal.ui.DetailViewModel
 import com.example.decisionjournal.ui.DecisionLoadState
+import com.example.decisionjournal.ui.decisionStatusLabel
+import com.example.decisionjournal.ui.formatDecisionDate
 import com.example.decisionjournal.ui.components.JournalTopBar
 import com.example.decisionjournal.ui.components.JournalErrorText
 import com.example.decisionjournal.ui.components.SectionHeader
@@ -72,10 +74,6 @@ import com.example.decisionjournal.ui.theme.Hairline
 import com.example.decisionjournal.ui.theme.MutedTerracotta
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-private val detailDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.CHINA)
 
 @Composable
 fun DecisionDetailScreen(
@@ -204,7 +202,7 @@ fun DecisionDetailScreen(
                 containerColor = MistSand,
                 borderColor = MutedTerracotta.copy(alpha = 0.38f),
             ) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = MutedTerracotta)
                         Text("提醒尚未安排", style = MaterialTheme.typography.titleMedium, color = MutedTerracotta)
@@ -241,12 +239,7 @@ fun DecisionDetailScreen(
         decision.let { d ->
             val reviewed = d.status == DecisionStatus.REVIEWED
             val due = !reviewed && isReviewDue(d, now)
-            val statusText = when {
-                reviewed -> "已回看"
-                due -> "待复盘"
-                isReviewUpcoming(d, now) -> "等待回看"
-                else -> "尚未设置日期"
-            }
+            val statusText = decisionStatusLabel(d, now, if (reviews.isNotEmpty()) setOf(d.id) else emptySet())
             SoftSurfaceCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = if (reviewed) MistGreen else if (due) MistBlue else MaterialTheme.colorScheme.surface,
@@ -326,11 +319,11 @@ fun DecisionDetailScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     onClick = onEdit,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(48.dp),
                     shape = MaterialTheme.shapes.medium,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 ) { Text("编辑") }
-                Button(onClick = onReview, modifier = Modifier.weight(1.35f), shape = MaterialTheme.shapes.medium) {
+                Button(onClick = onReview, modifier = Modifier.weight(1.35f).height(48.dp), shape = MaterialTheme.shapes.medium) {
                     Text(
                         when {
                             reviewed -> "补充一次回看"
@@ -345,7 +338,7 @@ fun DecisionDetailScreen(
             SectionHeader("后来")
             if (reviews.isEmpty()) {
                 SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MaterialTheme.colorScheme.surface) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("还没有复盘记录", style = MaterialTheme.typography.titleMedium)
                         Text("等事情走过一段路，再回来写下结果。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -371,7 +364,15 @@ fun DecisionDetailScreen(
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
         title = { Text("删除决定？") },
-        text = { Text("将永久删除 ${choices.size} 个候选项和 ${reviews.size} 条回看，且无法恢复。") },
+        text = {
+            Text(
+                if (reviews.isEmpty()) {
+                    "将永久删除这条决定及 ${choices.size} 个候选选项，且无法恢复。"
+                } else {
+                    "将永久删除 ${choices.size} 个候选项和 ${reviews.size} 条回看，且无法恢复。"
+                },
+            )
+        },
         confirmButton = { TextButton(enabled = !vm.deleting, onClick = { confirmDelete = false; vm.delete(id, onBack) }) { Text(if (vm.deleting) "删除中…" else "删除") } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
     )
@@ -432,13 +433,13 @@ private fun DecisionStatePage(
 @Composable
 private fun ReviewArchiveCard(number: Int, review: Review, previousEventAt: Long, highlight: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
     SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = if (highlight) MistGreen else MaterialTheme.colorScheme.surface) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("第 $number 次回看", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(formatDate(review.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onEdit) { Text("更正") }
-                    TextButton(onClick = onDelete) { Text("删除") }
+                    TextButton(onClick = onEdit, modifier = Modifier.height(48.dp)) { Text("更正") }
+                    TextButton(onClick = onDelete, modifier = Modifier.height(48.dp)) { Text("删除") }
                 }
             }
             Text(reviewIntervalLabel(review.createdAt, previousEventAt, number == 1), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -515,21 +516,28 @@ private fun NoteLine(label: String, value: String) {
 @Composable
 private fun ReflectionPanel(title: String, content: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier) {
     SoftSurfaceCard(modifier = modifier, containerColor = color) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(content, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-private fun formatDate(timestamp: Long): String =
-    Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate().format(detailDateFormatter)
+private fun formatDate(timestamp: Long): String = formatDecisionDate(timestamp)
 
 private fun formatDate(decision: Decision): String =
-    localReviewDate(decision)?.format(detailDateFormatter) ?: formatDate(decision.reviewDate ?: decision.decisionDate)
+    localReviewDate(decision)?.let { formatDecisionDate(it) }
+        ?: formatDate(decision.reviewDate ?: decision.decisionDate)
 
-internal fun reviewIntervalLabel(reviewedAt: Long, previousEventAt: Long, isFirstReview: Boolean): String {
-    val days = ((reviewedAt - previousEventAt) / 86_400_000L).coerceAtLeast(0)
+internal fun reviewIntervalLabel(
+    reviewedAt: Long,
+    previousEventAt: Long,
+    isFirstReview: Boolean,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String {
+    val reviewedDate = Instant.ofEpochMilli(reviewedAt).atZone(zone).toLocalDate()
+    val previousDate = Instant.ofEpochMilli(previousEventAt).atZone(zone).toLocalDate()
+    val days = java.time.temporal.ChronoUnit.DAYS.between(previousDate, reviewedDate).coerceAtLeast(0)
     val distance = when {
         days == 0L -> "同一天"
         days == 1L -> "1 天"

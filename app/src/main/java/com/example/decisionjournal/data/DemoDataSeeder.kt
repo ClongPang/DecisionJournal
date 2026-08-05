@@ -82,7 +82,7 @@ class DemoDataSeeder @Inject constructor(
             selectedIndex = 0,
         )
 
-        // 未来待复盘：用于验证未来日期、通知任务和首页最近决定。
+        // 未来待回看：用于验证未来日期、通知任务和首页最近决定。
         seedActive(
             Decision(
                 question = "要不要开始一个长期副业？",
@@ -102,7 +102,7 @@ class DemoDataSeeder @Inject constructor(
             selectedIndex = 0,
         )
 
-        // 已到期：用于验证首页待复盘卡片和“待复盘”状态。
+        // 已到期：用于验证首页待回看卡片和“待回看”状态。
         seedActive(
             Decision(
                 question = "这次旅行要不要选择慢一点的路线？",
@@ -198,32 +198,38 @@ class DemoDataSeeder @Inject constructor(
      */
     private suspend fun seedBulkWarmupData() {
         val topics = listOf(
-            "是否要开始规律运动？" to ("最近久坐很多，希望每周安排固定运动时间。" to listOf("健康", "时间")),
-            "要不要换一部手机？" to ("旧手机仍能使用，但续航和拍照已经不太够用。" to listOf("金钱", "便利")),
-            "是否接受朋友的合作邀请？" to ("合作机会不错，但需要重新分配现有项目时间。" to listOf("成长", "关系")),
-            "这次假期要不要独自旅行？" to ("想拥有完全按自己节奏安排的假期。" to listOf("自由", "安全")),
-            "要不要学习一门新语言？" to ("工作中可能会用到，也对文化本身感兴趣。" to listOf("学习", "成长")),
-            "是否把家里的房间重新布置？" to ("现在的空间比较拥挤，影响工作和休息。" to listOf("生活平衡", "金钱")),
+            WarmupTopic("是否要开始规律运动？", "最近久坐很多，希望每周安排固定运动时间。", listOf("健康", "时间"), listOf("自律", "时间安排")),
+            WarmupTopic("要不要换一部手机？", "旧手机仍能使用，但续航和拍照已经不太够用。", listOf("金钱", "便利"), listOf("开销", "浪费")),
+            WarmupTopic("是否接受朋友的合作邀请？", "合作机会不错，但需要重新分配现有项目时间。", listOf("成长", "关系"), listOf("执行成本", "预期落差")),
+            WarmupTopic("这次假期要不要独自旅行？", "想拥有完全按自己节奏安排的假期。", listOf("自由", "安全"), listOf("孤单", "行程风险")),
+            WarmupTopic("要不要学习一门新语言？", "工作中可能会用到，也对文化本身感兴趣。", listOf("学习", "成长"), listOf("坚持", "时间")),
+            WarmupTopic("是否把家里的房间重新布置？", "现在的空间比较拥挤，影响工作和休息。", listOf("生活平衡", "金钱"), listOf("精力", "效果不确定")),
         )
         repeat(48) { index ->
-            val days = (index * 7L) % 365L
+            // A few warmup records sit in the recent days so today/week/month period counts
+            // stay visibly distinct (3/5/7 rather than an artificial 3/3/3), then the rest
+            // spread back across the year for pagination and archive verification.
+            val days = when {
+                index < 5 -> index.toLong()
+                else -> 5L + ((index - 5) * 9L % 360L)
+            }
             val topic = topics[index % topics.size]
             val decision = Decision(
                 // The warmup mechanism must never leak implementation labels into the UI.
                 // Repeated questions are intentional: they model real recurring decisions
                 // across different dates without making a test fixture visible to the user.
-                question = topic.first,
-                context = topic.second.first,
-                benefits = listOf(topic.second.second[0], topic.second.second[1]),
-                concerns = listOf("执行成本", if (index % 2 == 0) "不确定" else "生活平衡"),
+                question = topic.question,
+                context = topic.context,
+                benefits = topic.benefits,
+                concerns = if (index % 2 == 0) topic.concerns else listOf(topic.concerns[1], topic.concerns[0]),
                 futureNote = if (index % 3 == 0) "希望未来的我能记得，当时已经认真比较过。" else null,
                 expectedOutcome = "先用一段时间验证这个选择是否适合现在的生活。",
-                confidence = (index % 5) + 1,
+                confidence = 3 + (index % 3),
                 createdAt = daysAgo(days),
                 updatedAt = daysAgo((days - 1).coerceAtLeast(0)),
                 decisionDate = daysAgo(days),
                 reviewDate = when {
-                    index % 7 == 0 -> daysAgo((index % 4).toLong())
+                    index % 7 == 0 -> daysAgo(((index % 5) * 6).toLong())
                     index % 5 == 0 -> daysFromNow(7 + (index % 14).toLong())
                     else -> null
                 },
@@ -233,6 +239,7 @@ class DemoDataSeeder @Inject constructor(
                 Choice(decisionId = 0, text = "暂时保持现状", benefits = listOf("节省精力", "不改变习惯"), concerns = listOf("可能错过机会")),
             )
             if (index % 6 == 0) {
+                val isExpected = (index / 6) % 2 == 0
                 seedReviewed(
                     decision = decision.copy(reviewDate = null),
                     choices = choices,
@@ -241,9 +248,10 @@ class DemoDataSeeder @Inject constructor(
                             decisionId = 0,
                             createdAt = daysAgo((days - 10).coerceAtLeast(0)),
                             result = "实际执行后发现，结果基本符合当时的预期，也获得了一些新的反馈。",
-                            satisfaction = (index % 5) + 1,
-                            expectationMatch = if (index % 2 == 0) ExpectationMatch.EXPECTED else ExpectationMatch.BETTER,
-                            accurateJudgment = "提前考虑到执行成本是有帮助的。",
+                            // “符合预期”的样本满意度自然分布在 3–5，避免出现大量 1 分。
+                            satisfaction = if (isExpected) 3 + ((index / 6) % 3) else 4 + ((index / 6) % 2),
+                            expectationMatch = if (isExpected) ExpectationMatch.EXPECTED else ExpectationMatch.BETTER,
+                            accurateJudgment = "提前考虑关键因素是有帮助的。",
                             unexpectedFinding = "真正影响结果的是持续执行，而不是最初的选择。",
                             nextTimeNote = "下一次会先设定更小、更容易验证的行动。",
                         ),
@@ -299,3 +307,11 @@ class DemoDataSeeder @Inject constructor(
         const val SEEDED_KEY = "seeded-v3"
     }
 }
+
+/** A warmup topic carries its own concern pool so the demo archive does not repeat one worry. */
+private data class WarmupTopic(
+    val question: String,
+    val context: String,
+    val benefits: List<String>,
+    val concerns: List<String>,
+)

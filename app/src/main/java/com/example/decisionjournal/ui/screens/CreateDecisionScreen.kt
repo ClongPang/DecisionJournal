@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -46,8 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -391,7 +390,7 @@ fun CreateDecisionScreen(
                 OutlinedButton(
                     enabled = choiceText.isNotBlank(),
                     onClick = ::savePendingChoice,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = MaterialTheme.shapes.medium,
                 ) { Text(if (editingChoiceIndex == null) "添加这个选项" else "保存修改") }
                 if (editingChoiceIndex != null) {
@@ -406,19 +405,24 @@ fun CreateDecisionScreen(
                         hero = isSelected,
                         borderColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.52f) else null,
                     ) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(isSelected, { hasUnsavedChanges = true; selected = index })
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .toggleable(value = isSelected, role = Role.RadioButton, onValueChange = { hasUnsavedChanges = true; selected = index }),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(isSelected, null)
                                 if (isSelected) ChoiceSelectionRail(Modifier.padding(end = 10.dp))
                                 Text(choice.text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                                 if (isSelected) Text("最终选择", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
                             Text("利好 ${choice.benefits.size} · 担忧 ${choice.concerns.size}", modifier = Modifier.padding(start = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(enabled = index > 0, onClick = { moveChoice(index, -1) }) { Text("上移") }
-                                TextButton(enabled = index < choices.lastIndex, onClick = { moveChoice(index, 1) }) { Text("下移") }
-                                TextButton(onClick = { editChoice(index) }) { Text("编辑") }
-                                TextButton(onClick = { deleteChoice(index) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                                TextButton(enabled = index > 0, onClick = { moveChoice(index, -1) }, modifier = Modifier.height(48.dp)) { Text("上移") }
+                                TextButton(enabled = index < choices.lastIndex, onClick = { moveChoice(index, 1) }, modifier = Modifier.height(48.dp)) { Text("下移") }
+                                TextButton(onClick = { editChoice(index) }, modifier = Modifier.height(48.dp)) { Text("编辑") }
+                                TextButton(onClick = { deleteChoice(index) }, modifier = Modifier.height(48.dp)) { Text("删除", color = MaterialTheme.colorScheme.error) }
                             }
                         }
                     }
@@ -475,14 +479,15 @@ fun CreateDecisionScreen(
                         }
                     }
                 }
+                val reviewDateIsToday = reviewDate?.let {
+                    reviewDateCalendarKey?.let { key -> !LocalDate.parse(key).isAfter(LocalDate.now()) }
+                        ?: (it <= System.currentTimeMillis())
+                } == true
                 Text(
-                    if (reviewDate?.let {
-                            reviewDateCalendarKey?.let { key -> !LocalDate.parse(key).isAfter(LocalDate.now()) }
-                                ?: (it <= System.currentTimeMillis())
-                        } == true) {
-                        "今天回看会在保存后立即显示为待回看，不会发送系统通知。"
-                    } else {
-                        "系统会在所选日期${reminderTimeLabel()}提醒你，实际到达可能略有延迟。拒绝权限也不影响保存。"
+                    when {
+                        reviewDate == null -> "不设置回看日期也可以保存，之后仍可随时补充。"
+                        reviewDateIsToday -> "今天回看会在保存后立即显示为待回看，不会发送系统通知。"
+                        else -> "系统会在所选日期${reminderTimeLabel()}提醒你，实际到达可能略有延迟。拒绝权限也不影响保存。"
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
@@ -505,12 +510,13 @@ fun CreateDecisionScreen(
                 }
             }
         }
-        vm.error?.let { JournalErrorText(it) }
         }
-        Surface(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().imePadding(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            vm.error?.let { JournalErrorText(it, Modifier.padding(horizontal = JournalDimens.pageHorizontal)) }
+            Surface(
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = JournalDimens.pageHorizontal, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -527,6 +533,7 @@ fun CreateDecisionScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 ) { Text(if (vm.saveState == SaveState.Saving) "保存中…" else if (step < 2) "继续" else "封存这段判断") }
             }
+        }
         }
     }
     if (confirmExit) AlertDialog(
@@ -569,11 +576,9 @@ private fun ConfidenceSelector(value: Int?, onSelect: (Int) -> Unit) {
             (1..5).forEach { score ->
                 val selected = value == score
                 Surface(
-                    onClick = { onSelect(score) },
-                    modifier = Modifier.weight(1f).height(48.dp).semantics {
-                        role = Role.RadioButton
-                        this.selected = selected
-                    },
+                    modifier = Modifier.weight(1f).height(48.dp)
+                        .toggleable(value = selected, role = Role.RadioButton, onValueChange = { onSelect(score) })
+                        .semantics { contentDescription = score.toString() },
                     shape = MaterialTheme.shapes.small,
                     color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),

@@ -204,4 +204,50 @@ class JournalStatsTest {
         assertEquals("距决定 3 天", reviewIntervalLabel(3 * 86_400_000L, 0L, true))
         assertEquals("距上次回看 1 天", reviewIntervalLabel(4 * 86_400_000L, 3 * 86_400_000L, false))
     }
+
+    @Test
+    fun reviewIntervalsCountCalendarDaysAcrossMidnight() {
+        val zone = ZoneId.of("Asia/Shanghai")
+        val previous = LocalDate.of(2026, 8, 5).atTime(22, 0).atZone(zone).toInstant().toEpochMilli()
+        val next = LocalDate.of(2026, 8, 6).atTime(6, 0).atZone(zone).toInstant().toEpochMilli()
+        // Nine hours apart, but the review crossed midnight into the next calendar day.
+        assertEquals("距上次回看 1 天", reviewIntervalLabel(next, previous, false, zone))
+        assertEquals("距决定 1 天", reviewIntervalLabel(next, previous, true, zone))
+        val sameDay = LocalDate.of(2026, 8, 6).atTime(23, 0).atZone(zone).toInstant().toEpochMilli()
+        assertEquals("距决定 同一天", reviewIntervalLabel(sameDay, next, true, zone))
+    }
+
+    @Test
+    fun statusLabelsUnifyTerminologyAcrossScreens() {
+        val date = LocalDate.of(2026, 8, 5)
+        fun at(day: LocalDate): Long = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val now = at(date)
+        val due = Decision(question = "到期", reviewDate = at(date.minusDays(1)))
+        val upcoming = Decision(question = "未来", reviewDate = at(date.plusDays(7)))
+        val reviewed = Decision(question = "已回看", status = DecisionStatus.REVIEWED)
+        val unscheduled = Decision(question = "未设日期")
+
+        assertEquals("待回看", decisionStatusLabel(due, now))
+        assertEquals("等待回看", decisionStatusLabel(upcoming, now))
+        assertEquals("已回看", decisionStatusLabel(reviewed, now))
+        assertEquals("未设日期", decisionStatusLabel(unscheduled, now))
+    }
+
+    @Test
+    fun statusLabelShowsReviewedForRecordsThatOnlyCarryAnExistingReview() {
+        val now = LocalDate.of(2026, 8, 5).atStartOfDay(zone).toInstant().toEpochMilli()
+        val hasReviewNoDate = Decision(id = 9, question = "有复盘但未排期", status = DecisionStatus.ACTIVE)
+
+        assertEquals("已回看", decisionStatusLabel(hasReviewNoDate, now, setOf(9L)))
+    }
+
+    @Test
+    fun decisionDatesHideYearForTheCurrentYearAndAddItForEarlierYears() {
+        val now = LocalDate.of(2026, 8, 5)
+        val currentYear = LocalDate.of(2026, 3, 15)
+        val earlierYear = LocalDate.of(2025, 12, 31)
+
+        assertEquals("3月15日", formatDecisionDate(currentYear.atStartOfDay(zone).toInstant().toEpochMilli(), zone, now))
+        assertEquals("2025年12月31日", formatDecisionDate(earlierYear.atStartOfDay(zone).toInstant().toEpochMilli(), zone, now))
+    }
 }

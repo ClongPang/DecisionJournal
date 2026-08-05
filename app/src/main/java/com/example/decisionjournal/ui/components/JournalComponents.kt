@@ -176,6 +176,7 @@ fun JournalTextField(
     placeholder: (@Composable (() -> Unit))? = null,
     minLines: Int = 1,
     maxLines: Int = Int.MAX_VALUE,
+    trailingIcon: (@Composable (() -> Unit))? = null,
 ) {
     OutlinedTextField(
         value = value,
@@ -183,6 +184,7 @@ fun JournalTextField(
         modifier = modifier,
         label = label,
         placeholder = placeholder,
+        trailingIcon = trailingIcon,
         minLines = minLines,
         maxLines = maxLines,
         shape = RoundedCornerShape(14.dp),
@@ -201,9 +203,9 @@ fun JournalTextField(
 }
 
 @Composable
-fun JournalErrorText(message: String) {
+fun JournalErrorText(message: String, modifier: Modifier = Modifier) {
     Surface(
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive },
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.errorContainer,
     ) {

@@ -30,9 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.decisionjournal.data.model.Decision
-import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.ui.HomeViewModel
 import com.example.decisionjournal.ui.DecisionListState
+import com.example.decisionjournal.ui.decisionStatusLabel
+import com.example.decisionjournal.ui.formatDecisionDate
 import com.example.decisionjournal.ui.components.NarrativeCard
 import com.example.decisionjournal.ui.components.PrimaryActionButton
 import com.example.decisionjournal.ui.components.StatusPill
@@ -56,6 +57,7 @@ fun HomeScreen(
 ) {
     val listState by vm.listState.collectAsStateWithLifecycle()
     val due by vm.due.collectAsStateWithLifecycle()
+    val now by vm.now.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     Column(
         Modifier.fillMaxSize()
@@ -81,12 +83,7 @@ fun HomeScreen(
             is DecisionListState.Content -> {
                 val decisions = (listState as DecisionListState.Content).decisions
                 val featured = due.firstOrNull() ?: decisions.firstOrNull()
-                val featuredStatus = when {
-                    due.isNotEmpty() -> "待回看"
-                    featured?.status == DecisionStatus.REVIEWED -> "已回看"
-                    featured?.reviewDate != null -> "等待回看"
-                    else -> "此刻的判断"
-                }
+                val featuredStatus = featured?.let { decisionStatusLabel(it, now) } ?: "待回看"
                 featured?.let { decision ->
                     ArchiveCoverCard(decision, featuredStatus, onOpen)
                     if (due.size > 1) {
@@ -137,7 +134,7 @@ private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) 
         onClick = { onOpen(decision.id) },
         accessibilityLabel = "$status，${decision.question}。打开决定详情",
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (status == "待回看") Icons.Rounded.Schedule else Icons.Rounded.AutoStories, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
@@ -151,7 +148,7 @@ private fun ArchiveCoverCard(decision: Decision, status: String, onOpen: (Long) 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Rounded.CalendarToday, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(
-                    if (status == "待回看") "现在就可以记录结果" else "决定于 ${Instant.ofEpochMilli(decision.decisionDate).atZone(ZoneId.systemDefault()).toLocalDate().format(homeDate)}",
+                    if (status == "待回看") "现在就可以记录结果" else "决定于 ${formatDecisionDate(decision.decisionDate, weekDay = true)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

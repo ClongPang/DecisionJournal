@@ -86,6 +86,7 @@ class HomeViewModel @Inject constructor(repo: DecisionRepository) : ViewModel() 
     val listState = decisionStates
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DecisionListState.Loading)
     private val clock = minuteClock().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), System.currentTimeMillis())
+    val now = clock
     val due = combine(refresh, clock) { _, now -> now }.flatMapLatest(repo::due)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

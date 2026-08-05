@@ -56,7 +56,7 @@ private suspend fun <T> capture(block: suspend () -> T): Result<T> = try {
 
 class DecisionRepository @Inject constructor(
     private val dao: DecisionDao,
-    private val reminderScheduler: ReviewReminderScheduler,
+    private val reminderScheduler: ReminderScheduler,
 ) {
     val decisions = dao.observeAll()
     val reviewedDecisionIds = dao.observeReviewedDecisionIds().map { it.toSet() }
@@ -135,14 +135,14 @@ class DecisionRepository @Inject constructor(
         val validationError = ReviewValidation.validate(if (input.reviewId != null) input.copy(nextReviewDate = null) else input)
         require(validationError == null) { validationError ?: "复盘内容无效" }
         require(existingDecision != null) { "这条决定不存在或已被删除" }
-        val scheduleDate = if (input.reviewId != null) existingDecision.reviewDate else input.nextReviewDate
-        val scheduleKey = if (input.reviewId != null) existingDecision.reviewDateKey else input.nextReviewDateKey
-        val normalizedNextReviewDateKey = scheduleKey ?: reviewDateKey(scheduleDate)
+        val now = System.currentTimeMillis()
+        val scheduleDate = input.nextReviewDate
+        val normalizedNextReviewDateKey = input.nextReviewDateKey ?: reviewDateKey(scheduleDate)
         val reminderAt = reviewReminderAt(scheduleDate, reviewDateKey = normalizedNextReviewDateKey)
         val review = Review(
             id = input.reviewId ?: 0L,
             decisionId = input.decisionId,
-            createdAt = input.reviewId?.let { dao.getReview(it)?.createdAt } ?: System.currentTimeMillis(),
+            createdAt = input.reviewId?.let { dao.getReview(it)?.createdAt } ?: now,
             result = input.result.trim(),
             satisfaction = input.satisfaction,
             expectationMatch = input.expectationMatch,
@@ -151,13 +151,19 @@ class DecisionRepository @Inject constructor(
             nextTimeNote = input.nextTimeNote?.trim()?.takeIf { it.isNotEmpty() },
         )
         val id = if (input.reviewId == null) {
-            dao.saveReview(review, scheduleDate, reminderAt, normalizedNextReviewDateKey, System.currentTimeMillis())
+            dao.saveReview(review, scheduleDate, reminderAt, normalizedNextReviewDateKey, now)
         } else {
             require(review.createdAt > 0L) { "这条复盘不存在或已被删除" }
             check(dao.updateReview(review) == 1) { "更新复盘失败" }
+            // An edited review carries its own next-review decision. Align the decision
+            // schedule, status and reminder with the edit branch so changed dates or
+            // “不再提醒” take effect exactly like a brand new review.
+            check(dao.updateReviewSchedule(input.decisionId, scheduleDate, reminderAt, normalizedNextReviewDateKey, DecisionStatusRules.afterReview(scheduleDate), now) == 1) {
+                "更新复盘安排失败"
+            }
             input.reviewId
         }
-        val reminderState = if (input.reviewId != null) existingDecision.reminderState else updateReminderState(input.decisionId, scheduleDate, reminderAt)
+        val reminderState = updateReminderState(input.decisionId, scheduleDate, reminderAt)
         val warning = reminderWarning("复盘已保存", reminderState)
         SaveOutcome(id, warning)
     }

@@ -5,8 +5,11 @@ import com.example.decisionjournal.data.model.DecisionStatus
 import com.example.decisionjournal.data.DecisionSearchFields
 import com.example.decisionjournal.data.isReviewDue
 import com.example.decisionjournal.data.isReviewUpcoming
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 data class DecisionStats(
     val completedCount: Int,
@@ -162,11 +165,43 @@ fun searchMatchSource(
     fun contains(values: List<String?>): Boolean = values.filterNotNull().any { it.contains(keyword, ignoreCase = true) }
     return when {
         contains(listOf(decision.question)) -> "问题"
-        contains(listOf(decision.context, decision.futureNote, decision.expectedOutcome)) -> "背景或写给未来"
+        contains(listOf(decision.context, decision.futureNote, decision.expectedOutcome)) -> "背景、预期或写给未来"
         contains(decision.benefits + decision.concerns) -> "在意或担心"
         contains(searchFields.firstOrNull { it.decisionId == decision.id }?.terms.orEmpty()) -> "候选项或复盘内容"
         else -> null
     }
+}
+
+/**
+ * 统一的状态标签，供首页、决定列表与详情复用：待回看 / 等待回看 / 已回看 / 未设日期。
+ * `reviewedDecisionIds` 让“已有复盘但暂未安排下次日期”的记录也显示为已回看。
+ */
+fun decisionStatusLabel(
+    decision: Decision,
+    now: Long = System.currentTimeMillis(),
+    reviewedDecisionIds: Set<Long> = emptySet(),
+): String = when {
+    isReviewDue(decision, now) && decision.status != DecisionStatus.REVIEWED -> "待回看"
+    isReviewUpcoming(decision, now) -> "等待回看"
+    decision.status == DecisionStatus.REVIEWED || decision.id in reviewedDecisionIds -> "已回看"
+    else -> "未设日期"
+}
+
+/** 当年日期省略年份，非当年日期补上年份；`weekDay` 用于首页带星期几的日期行。 */
+fun formatDecisionDate(
+    timestamp: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+    now: LocalDate = LocalDate.now(zone),
+    weekDay: Boolean = false,
+): String = formatDecisionDate(Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate(), now, weekDay)
+
+fun formatDecisionDate(
+    date: LocalDate,
+    now: LocalDate = LocalDate.now(),
+    weekDay: Boolean = false,
+): String {
+    val pattern = (if (date.year == now.year) "" else "yyyy年") + if (weekDay) "M月d日 · EEEE" else "M月d日"
+    return date.format(DateTimeFormatter.ofPattern(pattern, Locale.CHINA))
 }
 
 private fun countCreatedInRange(decisions: List<Decision>, range: DateTimeRange): Int =

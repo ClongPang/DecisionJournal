@@ -1,6 +1,14 @@
 package com.example.decisionjournal.data
 
+import com.example.decisionjournal.data.local.DecisionDao
+import com.example.decisionjournal.data.model.Choice
 import com.example.decisionjournal.data.model.Decision
+import com.example.decisionjournal.data.model.DecisionStatus
+import com.example.decisionjournal.data.model.ReminderState
+import com.example.decisionjournal.data.model.Review
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -67,4 +75,164 @@ class ReviewReminderSchedulerTest {
             reviewReminderAt(legacyInstant, beforeDate, losAngeles, key),
         )
     }
+
+    @Test
+    fun editingReviewAppliesChangedNextReviewDateAndReminder() = runBlocking {
+        val dao = FakeDecisionDao()
+        val scheduler = FakeReminderScheduler()
+        val repo = DecisionRepository(dao, scheduler)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val originalDate = today.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
+        val decisionId = dao.insertDecision(
+            Decision(
+                question = "是否换工作",
+                reviewDate = originalDate,
+                reviewDateKey = today.plusDays(7).toString(),
+                reminderAt = today.plusDays(7).atTime(20, 0).atZone(zone).toInstant().toEpochMilli(),
+                reminderState = ReminderState.SCHEDULED,
+            ),
+        )
+        val reviewId = dao.insertReview(
+            Review(decisionId = decisionId, result = "第一次结果", createdAt = today.atStartOfDay(zone).toInstant().toEpochMilli()),
+        )
+        val newDate = today.plusDays(30).atStartOfDay(zone).toInstant().toEpochMilli()
+        val newKey = today.plusDays(30).toString()
+        val expectedReminder = today.plusDays(30).atTime(20, 0).atZone(zone).toInstant().toEpochMilli()
+
+        val outcome = repo.review(
+            ReviewInput(
+                decisionId = decisionId,
+                result = "更正后的结果",
+                satisfaction = 4,
+                reviewId = reviewId,
+                nextReviewDate = newDate,
+                nextReviewDateKey = newKey,
+            ),
+        )
+
+        assertTrue(outcome.isSuccess)
+        val saved = dao.decisions.getValue(decisionId)
+        assertEquals(newDate, saved.reviewDate)
+        assertEquals(newKey, saved.reviewDateKey)
+        assertEquals(DecisionStatus.ACTIVE, saved.status)
+        assertEquals(expectedReminder, saved.reminderAt)
+        assertEquals(ReminderState.SCHEDULED, saved.reminderState)
+        assertEquals("更正后的结果", dao.reviews.getValue(reviewId).result)
+        assertEquals(Triple(decisionId, newDate, expectedReminder), scheduler.lastSchedule)
+    }
+
+    @Test
+    fun editingReviewCanClearNextReviewDateAndReminder() = runBlocking {
+        val dao = FakeDecisionDao()
+        val scheduler = FakeReminderScheduler()
+        val repo = DecisionRepository(dao, scheduler)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val decisionId = dao.insertDecision(
+            Decision(
+                question = "是否换工作",
+                reviewDate = today.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli(),
+                reviewDateKey = today.plusDays(7).toString(),
+                reminderAt = today.plusDays(7).atTime(20, 0).atZone(zone).toInstant().toEpochMilli(),
+                reminderState = ReminderState.SCHEDULED,
+            ),
+        )
+        val reviewId = dao.insertReview(
+            Review(decisionId = decisionId, result = "第一次结果", createdAt = today.atStartOfDay(zone).toInstant().toEpochMilli()),
+        )
+
+        val outcome = repo.review(
+            ReviewInput(decisionId = decisionId, result = "最终结果", satisfaction = null, reviewId = reviewId),
+        )
+
+        assertTrue(outcome.isSuccess)
+        val saved = dao.decisions.getValue(decisionId)
+        assertEquals(null, saved.reviewDate)
+        assertEquals(null, saved.reviewDateKey)
+        assertEquals(DecisionStatus.REVIEWED, saved.status)
+        assertEquals(null, saved.reminderAt)
+        assertEquals(ReminderState.NOT_APPLICABLE, saved.reminderState)
+        assertEquals(Triple(decisionId, null, null), scheduler.lastSchedule)
+    }
+}
+
+private class FakeDecisionDao : DecisionDao() {
+    val decisions = mutableMapOf<Long, Decision>()
+    val reviews = mutableMapOf<Long, Review>()
+    private var nextDecisionId = 1L
+    private var nextReviewId = 1L
+
+    override suspend fun getAll(): List<Decision> = decisions.values.sortedBy { it.id }
+    override suspend fun getById(id: Long): Decision? = decisions[id]
+    override fun observeAll(): Flow<List<Decision>> = flowOf(decisions.values.toList())
+    override fun observeById(id: Long): Flow<Decision?> = flowOf(decisions[id])
+    override suspend fun insertDecision(decision: Decision): Long {
+        val id = if (decision.id == 0L) nextDecisionId++ else decision.id
+        decisions[id] = decision.copy(id = id)
+        return id
+    }
+    override suspend fun updateDecision(decision: Decision): Int {
+        if (decisions[decision.id] == null) return 0
+        decisions[decision.id] = decision
+        return 1
+    }
+    override suspend fun insertChoices(choices: List<Choice>): List<Long> = choices.map { 1L }
+    override suspend fun deleteChoices(decisionId: Long) {}
+    override fun observeChoices(decisionId: Long): Flow<List<Choice>> = flowOf(emptyList())
+    override fun observeAllChoices(): Flow<List<Choice>> = flowOf(emptyList())
+    override suspend fun insertReview(review: Review): Long {
+        val id = if (review.id == 0L) nextReviewId++ else review.id
+        reviews[id] = review.copy(id = id)
+        return id
+    }
+    override suspend fun updateReview(review: Review): Int {
+        if (reviews[review.id] == null) return 0
+        reviews[review.id] = review
+        return 1
+    }
+    override suspend fun getReview(id: Long): Review? = reviews[id]
+    override suspend fun deleteReview(reviewId: Long, decisionId: Long): Int =
+        if (reviews.remove(reviewId) != null) 1 else 0
+    override suspend fun countReviews(decisionId: Long): Int = reviews.values.count { it.decisionId == decisionId }
+    override suspend fun updateReviewSchedule(id: Long, nextReviewDate: Long?, nextReminderAt: Long?, nextReviewDateKey: String?, status: DecisionStatus, updatedAt: Long): Int {
+        val decision = decisions[id] ?: return 0
+        decisions[id] = decision.copy(reviewDate = nextReviewDate, reminderAt = nextReminderAt, reviewDateKey = nextReviewDateKey, status = status, updatedAt = updatedAt)
+        return 1
+    }
+    override suspend fun updateReminderAt(id: Long, reminderAt: Long?, reviewDateKey: String?): Int {
+        val decision = decisions[id] ?: return 0
+        decisions[id] = decision.copy(reminderAt = reminderAt, reviewDateKey = reviewDateKey)
+        return 1
+    }
+    override suspend fun updateReminderState(id: Long, state: ReminderState): Int {
+        val decision = decisions[id] ?: return 0
+        decisions[id] = decision.copy(reminderState = state)
+        return 1
+    }
+    override fun observeReviews(decisionId: Long): Flow<List<Review>> =
+        flowOf(reviews.values.filter { it.decisionId == decisionId })
+    override fun observeAllReviews(): Flow<List<Review>> = flowOf(reviews.values.toList())
+    override fun observeReviewedDecisionIds(): Flow<List<Long>> =
+        flowOf(reviews.values.map { it.decisionId }.distinct())
+    override suspend fun deleteReviews(decisionId: Long) {
+        reviews.entries.removeAll { it.value.decisionId == decisionId }
+    }
+    override suspend fun deleteDecision(id: Long) {
+        decisions.remove(id)
+    }
+}
+
+private class FakeReminderScheduler : ReminderScheduler {
+    var lastSchedule: Triple<Long, Long?, Long?>? = null
+    override fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState {
+        lastSchedule = Triple(decisionId, reviewDate, reminderAt)
+        return if (reviewDate == null || reminderAt == null || reminderAt <= System.currentTimeMillis()) {
+            ReminderState.NOT_APPLICABLE
+        } else {
+            ReminderState.SCHEDULED
+        }
+    }
+    override fun notificationAvailability(): ReminderState? = null
+    override fun cancel(decisionId: Long) {}
 }

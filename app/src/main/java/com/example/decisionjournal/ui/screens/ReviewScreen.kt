@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -40,8 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -190,7 +189,7 @@ fun ReviewScreen(
         decision.let { current ->
             val selectedChoice = choices.firstOrNull { it.id == current.selectedChoiceId }
             SoftSurfaceCard(modifier = Modifier.fillMaxWidth(), containerColor = MistBlue) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     ArchiveKicker("当时的记录")
                     Text(current.question, style = MaterialTheme.typography.titleMedium)
                     selectedChoice?.let { Text("当时选择：${it.text}", style = MaterialTheme.typography.bodyMedium) }
@@ -402,11 +401,9 @@ private fun ReviewChoiceChip(
     color: androidx.compose.ui.graphics.Color,
 ) {
     Surface(
-        onClick = onClick,
-        modifier = modifier.height(52.dp).semantics {
-            role = Role.RadioButton
-            this.selected = selected
-        },
+        modifier = modifier.height(52.dp)
+            .toggleable(value = selected, role = Role.RadioButton, onValueChange = { onClick() })
+            .semantics { contentDescription = label },
         shape = MaterialTheme.shapes.small,
         color = if (selected) color else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
