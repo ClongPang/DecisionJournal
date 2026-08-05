@@ -1,7 +1,6 @@
 package com.example.decisionjournal.ui.screens
 
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -131,7 +130,8 @@ fun DecisionDetailScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     fun openNotificationSettings(state: ReminderState) {
-        val intent = if (state == ReminderState.CHANNEL_DISABLED && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        // ACTION_CHANNEL_NOTIFICATION_SETTINGS is available since API 26, the app's minSdk.
+        val intent = if (state == ReminderState.CHANNEL_DISABLED) {
             Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                 .putExtra(Settings.EXTRA_CHANNEL_ID, REVIEW_REMINDER_CHANNEL_ID)

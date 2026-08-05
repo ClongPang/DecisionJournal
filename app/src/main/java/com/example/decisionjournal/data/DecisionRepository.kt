@@ -197,6 +197,14 @@ class DecisionRepository @Inject constructor(
                 return@capture state == ReminderState.SCHEDULED
             }
             val state = reminderScheduler.notificationAvailability() ?: ReminderState.SCHEDULED
+            if (state == ReminderState.SCHEDULED && decision.reminderState.needsAttention) {
+                // Permission/notifications were the reason no WorkManager request was enqueued
+                // when the reminder was saved (or the one-shot task already consumed itself while
+                // unavailable). Reporting SCHEDULED without a real task would promise a
+                // notification that can never fire, so rebuild the request through scheduleOrCancel.
+                val rescheduled = updateReminderState(decisionId, reviewDate, expectedReminderAt)
+                return@capture rescheduled == ReminderState.SCHEDULED
+            }
             if (state != decision.reminderState) {
                 check(dao.updateReminderState(decisionId, state) == 1) { "更新提醒状态失败" }
             }

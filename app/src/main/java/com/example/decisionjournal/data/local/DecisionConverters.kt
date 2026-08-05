@@ -27,10 +27,17 @@ class DecisionConverters {
 
     @TypeConverter fun toStringList(value: String): List<String> {
         if (value.isEmpty()) return emptyList()
-        if (!value.startsWith(LIST_PREFIX)) return value.split(LEGACY_SEPARATOR)
-        val payload = value.removePrefix(LIST_PREFIX)
-        if (payload.isEmpty()) return emptyList()
-        return payload.split(',').mapNotNull { decoded(it) }
+        if (value.startsWith(LIST_PREFIX)) {
+            // An empty payload is the serialized empty list, not a broken entry.
+            val payload = value.removePrefix(LIST_PREFIX)
+            if (payload.isEmpty()) return emptyList()
+            // New values are length-safe. A legacy value that merely starts with the prefix
+            // (or a truncated payload) must not silently drop the user's text, so only accept
+            // the new format when every segment really is a decodable base64 entry.
+            val decoded = payload.split(',').map(::decoded)
+            if (decoded.none { it == null }) return decoded.filterNotNull()
+        }
+        return value.split(LEGACY_SEPARATOR)
     }
 
     private fun encoded(value: String): String =

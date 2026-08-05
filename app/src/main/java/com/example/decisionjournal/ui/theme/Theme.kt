@@ -42,7 +42,6 @@ object JournalDimens {
     val pageHorizontal = 20.dp
     val pageVertical = 20.dp
     val cardSpacing = 16.dp
-    val cardPadding = 20.dp
     val buttonHeight = 56.dp
     val smallRadius = 12.dp
     val cardRadius = 18.dp

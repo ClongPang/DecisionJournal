@@ -26,4 +26,15 @@ class DecisionConvertersTest {
         assertEquals(DecisionStatus.ACTIVE, converters.toStatus("REMOVED"))
         assertNull(converters.toExpectationMatch("REMOVED"))
     }
+
+    @Test
+    fun legacyValueThatMerelyStartsWithThePrefixIsNotDropped() {
+        assertEquals(listOf("v2:接受"), converters.toStringList("v2:接受"))
+        assertEquals(listOf("v2:接受", "拒绝"), converters.toStringList("v2:接受拒绝"))
+    }
+
+    @Test
+    fun emptySerializedListStaysEmpty() {
+        assertEquals(emptyList<String>(), converters.toStringList("v2:"))
+    }
 }

@@ -155,6 +155,62 @@ class ReviewReminderSchedulerTest {
         assertEquals(ReminderState.NOT_APPLICABLE, saved.reminderState)
         assertEquals(Triple(decisionId, null, null), scheduler.lastSchedule)
     }
+
+    @Test
+    fun refreshReminderStateRebuildsTheTaskWhenPermissionBecomesAvailable() = runBlocking {
+        val dao = FakeDecisionDao()
+        val scheduler = FakeReminderScheduler()
+        val repo = DecisionRepository(dao, scheduler)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val reviewDate = today.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
+        val reminderAt = today.plusDays(7).atTime(20, 0).atZone(zone).toInstant().toEpochMilli()
+        val decisionId = dao.insertDecision(
+            // The saved record already holds the expected reminder epoch, but no WorkManager
+            // request was enqueued because notification permission was missing at save time.
+            Decision(
+                question = "是否换工作",
+                reviewDate = reviewDate,
+                reviewDateKey = today.plusDays(7).toString(),
+                reminderAt = reminderAt,
+                reminderState = ReminderState.PERMISSION_REQUIRED,
+            ),
+        )
+        scheduler.lastSchedule = null
+
+        val restored = repo.refreshReminderState(decisionId)
+
+        assertTrue(restored)
+        assertEquals(ReminderState.SCHEDULED, dao.decisions.getValue(decisionId).reminderState)
+        // Merely persisting SCHEDULED would promise a notification that never fires. The task
+        // must actually be re-enqueued.
+        assertEquals(Triple(decisionId, reviewDate, reminderAt), scheduler.lastSchedule)
+    }
+
+    @Test
+    fun refreshReminderStateDoesNotClaimRestoredWhenStillUnavailable() = runBlocking {
+        val dao = FakeDecisionDao()
+        val scheduler = UnavailableReminderScheduler()
+        val repo = DecisionRepository(dao, scheduler)
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val reviewDate = today.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
+        val reminderAt = today.plusDays(7).atTime(20, 0).atZone(zone).toInstant().toEpochMilli()
+        val decisionId = dao.insertDecision(
+            Decision(
+                question = "是否换工作",
+                reviewDate = reviewDate,
+                reviewDateKey = today.plusDays(7).toString(),
+                reminderAt = reminderAt,
+                reminderState = ReminderState.PERMISSION_REQUIRED,
+            ),
+        )
+
+        val restored = repo.refreshReminderState(decisionId)
+
+        assertFalse(restored)
+        assertEquals(ReminderState.PERMISSION_REQUIRED, dao.decisions.getValue(decisionId).reminderState)
+    }
 }
 
 private class FakeDecisionDao : DecisionDao() {
@@ -234,5 +290,12 @@ private class FakeReminderScheduler : ReminderScheduler {
         }
     }
     override fun notificationAvailability(): ReminderState? = null
+    override fun cancel(decisionId: Long) {}
+}
+
+/** Simulates the delivery path still being unavailable (permission denied, notifications off). */
+private class UnavailableReminderScheduler : ReminderScheduler {
+    override fun scheduleOrCancel(decisionId: Long, reviewDate: Long?, reminderAt: Long?): ReminderState = ReminderState.PERMISSION_REQUIRED
+    override fun notificationAvailability(): ReminderState? = ReminderState.PERMISSION_REQUIRED
     override fun cancel(decisionId: Long) {}
 }
